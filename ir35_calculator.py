@@ -2,9 +2,6 @@ import streamlit as st
 from PIL import Image
 import requests
 from io import BytesIO
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
-from reportlab.lib.utils import ImageReader
 
 def ir35_tax_calculator(day_rate, work_days_per_year=220, pension_contribution_percent=0, student_loan_plan="None"):
     """Calculate take-home pay for consultants inside IR35."""
