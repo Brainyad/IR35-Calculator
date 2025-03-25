@@ -2,12 +2,16 @@ import streamlit as st
 from PIL import Image
 import requests
 from io import BytesIO
+from fpdf import FPDF
 
-def ir35_tax_calculator(day_rate, work_days_per_year=220, pension_contribution_percent=0, student_loan_plan="None"):
-    """Calculate take-home pay for consultants inside IR35."""
+def ir35_tax_calculator(day_rate, work_days_per_year=220, pension_contribution_percent=0, student_loan_plan="None", margin_percent=0, inside_ir35=True):
+    """Calculate take-home pay for consultants inside or outside IR35."""
     
     # Constants
     annual_income = day_rate * work_days_per_year
+    margin = annual_income * (margin_percent / 100)
+    annual_income -= margin  # Deduct company margin
+    
     personal_allowance = 12570  # Tax-free allowance (2024/25)
     basic_rate_threshold = 50270
     higher_rate_threshold = 125140
@@ -22,9 +26,9 @@ def ir35_tax_calculator(day_rate, work_days_per_year=220, pension_contribution_p
     ni_lower = 0.08  # 8% for earnings above £12,570
     ni_upper = 0.02  # 2% for earnings above £50,270
     
-    # Employer NI (deducted at source)
+    # Employer NI (only applies inside IR35)
     employer_ni_rate = 0.133
-    employer_ni = (annual_income - ni_threshold) * employer_ni_rate if annual_income > ni_threshold else 0
+    employer_ni = (annual_income - ni_threshold) * employer_ni_rate if annual_income > ni_threshold and inside_ir35 else 0
     annual_income -= employer_ni  # Deduct Employer NI before tax
     
     # Pension Contributions
@@ -66,7 +70,8 @@ def ir35_tax_calculator(day_rate, work_days_per_year=220, pension_contribution_p
     take_home_pay = annual_income - (income_tax + ni_contribution + student_loan_repayment)
     
     return {
-        "Gross Income": annual_income + employer_ni + pension_contribution,
+        "Gross Income": annual_income + employer_ni + pension_contribution + margin,
+        "Company Margin Deducted": margin,
         "Employer NI Deducted": employer_ni,
         "Pension Contributions": pension_contribution,
         "Income Tax": income_tax,
@@ -75,17 +80,19 @@ def ir35_tax_calculator(day_rate, work_days_per_year=220, pension_contribution_p
         "Net Take-Home Pay": take_home_pay
     }
 
+def generate_pdf(result):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, "IR35 Tax Calculation Results", ln=True, align='C')
+    
+    for key, value in result.items():
+        pdf.cell(200, 10, f"{key}: £{value:,.2f}", ln=True)
+    
+    return pdf.output(dest='S').encode('latin1')
+
 # Streamlit Web App
 st.set_page_config(page_title="IR35 Tax Calculator", layout="wide")
-
-# Company Logo
-logo_url = "https://www.b2econsulting.com/wp-content/uploads/2017/07/B2E-Circle-for-flipboxes.png"
-try:
-    response = requests.get(logo_url)
-    logo_image = Image.open(BytesIO(response.content))
-    st.image(logo_image, width=150)
-except Exception:
-    st.write("**B2E Consulting**")
 
 st.title("IR35 Tax Calculator")
 
@@ -96,18 +103,18 @@ with col1:
     day_rate = st.number_input("Enter your daily rate (£):", min_value=0, value=500)
     work_days_per_year = st.number_input("Enter workdays per year:", min_value=1, max_value=365, value=220)
     pension_contribution_percent = st.number_input("Pension Contribution (%):", min_value=0, value=0)
+    margin_percent = st.number_input("Company Margin Deduction (%):", min_value=0, value=10)
+    inside_ir35 = st.checkbox("Inside IR35", value=True)
 
 with col2:
     student_loan_plan = st.selectbox("Student Loan Plan:", ["None", "Plan 1", "Plan 2", "Plan 4", "Plan 5", "Postgraduate Loan"])
 
 if st.button("Calculate"):
-    result = ir35_tax_calculator(day_rate, work_days_per_year, pension_contribution_percent, student_loan_plan)
+    result = ir35_tax_calculator(day_rate, work_days_per_year, pension_contribution_percent, student_loan_plan, margin_percent, inside_ir35)
     
     st.subheader("Results")
-    st.write(f"**Gross Income:** £{result['Gross Income']:,.2f}")
-    st.write(f"**Employer NI Deducted:** £{result['Employer NI Deducted']:,.2f}")
-    st.write(f"**Pension Contributions:** £{result['Pension Contributions']:,.2f}")
-    st.write(f"**Income Tax:** £{result['Income Tax']:,.2f}")
-    st.write(f"**Employee NI:** £{result['Employee NI']:,.2f}")
-    st.write(f"**Student Loan Repayment:** £{result['Student Loan Repayment']:,.2f}")
-    st.write(f"**Net Take-Home Pay:** £{result['Net Take-Home Pay']:,.2f}")
+    for key, value in result.items():
+        st.write(f"**{key}:** £{value:,.2f}")
+    
+    pdf_data = generate_pdf(result)
+    st.download_button("Download Results as PDF", data=pdf_data, file_name="IR35_Tax_Calculation.pdf", mime="application/pdf")
