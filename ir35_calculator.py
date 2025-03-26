@@ -153,18 +153,6 @@ def plot_tax_breakdown(results):
     ax.pie(values, labels=labels, autopct='%1.1f%%')
     st.pyplot(fig)
 
-def update_calculation():
-    st.session_state.results = ir35_tax_calculator(
-        st.session_state.day_rate,
-        st.session_state.work_days,
-        st.session_state.pension_contribution,
-        st.session_state.employer_pension,
-        st.session_state.student_loan,
-        st.session_state.margin_percent,
-        st.session_state.status,
-        st.session_state.vat_registered
-    )
-
 # Streamlit App Configuration
 st.set_page_config(page_title="IR35 Tax Calculator", layout="wide")
 
@@ -191,7 +179,6 @@ with st.form("calculator_form"):
             min_value=0, 
             value=500,
             key="day_rate",
-            on_change=update_calculation,
             help="Your daily contract rate before deductions"
         )
         work_days_per_year = st.number_input(
@@ -200,7 +187,6 @@ with st.form("calculator_form"):
             max_value=365, 
             value=220,
             key="work_days",
-            on_change=update_calculation,
             help="Typically 220 days accounting for holidays and weekends"
         )
         pension_contribution_percent = st.number_input(
@@ -208,7 +194,6 @@ with st.form("calculator_form"):
             min_value=0, 
             value=0,
             key="pension_contribution",
-            on_change=update_calculation,
             help="Percentage of salary going to your pension"
         )
         employer_pension_percent = st.number_input(
@@ -216,7 +201,6 @@ with st.form("calculator_form"):
             min_value=0, 
             value=3,
             key="employer_pension",
-            on_change=update_calculation,
             help="Standard UK employer contribution is 3%+"
         )
         
@@ -225,7 +209,6 @@ with st.form("calculator_form"):
             "Student Loan Plan:", 
             ["None", "Plan 1", "Plan 2", "Plan 4", "Plan 5", "Postgraduate Loan"],
             key="student_loan",
-            on_change=update_calculation,
             help="Select your student loan repayment plan"
         )
         margin_percent = st.number_input(
@@ -233,7 +216,6 @@ with st.form("calculator_form"):
             min_value=0, 
             value=10,
             key="margin_percent",
-            on_change=update_calculation,
             help="Percentage kept by your umbrella company or agency"
         )
         status = st.radio(
@@ -241,7 +223,6 @@ with st.form("calculator_form"):
             ["Inside IR35", "Outside IR35"], 
             index=0,
             key="status",
-            on_change=update_calculation,
             help="Inside: Treated as employee. Outside: Self-employed"
         )
         if status == "Outside IR35":
@@ -249,7 +230,6 @@ with st.form("calculator_form"):
                 "VAT Registered? (20%)", 
                 value=False,
                 key="vat_registered",
-                on_change=update_calculation,
                 help="Check if you're VAT registered (outside IR35 only)"
             )
         else:
@@ -265,6 +245,16 @@ with st.form("calculator_form"):
     if margin_percent > 0: completion += 10
     if status: completion += 20
     progress_bar.progress(min(completion, 100))
+    
+    # Submit button for the form
+    submitted = st.form_submit_button("Calculate")
+    
+    if submitted:
+        st.session_state.results = ir35_tax_calculator(
+            day_rate, work_days_per_year, pension_contribution_percent,
+            employer_pension_percent, student_loan_plan, margin_percent, 
+            status, vat_registered
+        )
 
 # Results Display
 if st.session_state.results:
