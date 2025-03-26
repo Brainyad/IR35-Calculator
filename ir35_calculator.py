@@ -127,60 +127,68 @@ def generate_pdf(result, include_tax=True, include_ni=True, include_pension=True
     pdf.add_page()
     pdf.set_font("Arial", size=12)
     
-    # Header with logo and tagline
+    # Header with logo and tagline - more compact layout
     try:
-        pdf.image("B2e Logo.png", 10, 8, 33)
+        pdf.image("B2e Logo.png", 10, 8, 25)  # Smaller logo
     except:
         pass
     
-    # Tagline in top right
-    pdf.set_xy(140, 10)
-    pdf.set_font("Arial", style='I', size=10)
-    pdf.cell(60, 5, "Fuelling Transformation. Powered by Experts.", align='R')
+    # Tagline in top right - smaller and tighter
+    pdf.set_xy(120, 10)
+    pdf.set_font("Arial", style='I', size=8)
+    pdf.cell(80, 4, "Fuelling Transformation. Powered by Experts.", align='R')
     
-    # Main title
-    pdf.set_font("Arial", size=14, style='B')
-    pdf.ln(25)
-    pdf.cell(200, 10, "IR35 Tax Calculation Results", ln=True, align='C')
-    pdf.ln(10)
+    # Main title - less spacing
+    pdf.set_font("Arial", size=12, style='B')  # Smaller title
+    pdf.ln(15)  # Reduced spacing
+    pdf.cell(200, 8, "IR35 Tax Calculation Results", ln=True, align='C')
+    pdf.ln(5)  # Reduced spacing
     
-    # Add pie chart (50% smaller)
+    # Add pie chart - smaller and positioned better
     pie_chart_file = create_pie_chart(result)
-    pdf.image(pie_chart_file, x=60, w=70)  # Reduced width
-    
-    # Clean up temporary file
+    pdf.image(pie_chart_file, x=65, w=80)  # Centered and slightly larger
     if os.path.exists(pie_chart_file):
         os.remove(pie_chart_file)
     
-    # Results section
-    pdf.set_font("Arial", size=11)
-    pdf.cell(200, 8, f"Gross Income: £{result['Gross Income']:,.2f}", ln=True)
-    pdf.cell(200, 8, f"Net Take-Home Pay: £{result['Net Take-Home Pay']:,.2f}", ln=True)
-    pdf.ln(5)
+    # Results section - tighter layout
+    pdf.set_font("Arial", size=10)  # Smaller font
+    pdf.ln(5)  # Reduced spacing
+    
+    # Key metrics first
+    pdf.cell(100, 6, f"Gross Income: £{result['Gross Income']:,.2f}", ln=True)
+    pdf.cell(100, 6, f"Net Take-Home Pay: £{result['Net Take-Home Pay']:,.2f}", ln=True)
+    pdf.ln(3)
+    
+    # Detailed breakdown - two columns to save space
+    col_width = 90
+    pdf.set_font("Arial", size=9)
     
     if include_tax:
-        pdf.cell(200, 8, f"Income Tax: £{result['Income Tax']:,.2f}", ln=True)
+        pdf.cell(col_width, 5, f"Income Tax: £{result['Income Tax']:,.2f}")
     if include_ni:
-        pdf.cell(200, 8, f"Employee NI: £{result['Employee NI']:,.2f}", ln=True)
+        pdf.cell(col_width, 5, f"Employee NI: £{result['Employee NI']:,.2f}", ln=True)
         if result['Employer NI Deducted'] > 0:
-            pdf.cell(200, 8, f"Employer NI: £{result['Employer NI Deducted']:,.2f}", ln=True)
-    if include_pension:
-        pdf.cell(200, 8, f"Employee Pension: £{result['Employee Pension']:,.2f}", ln=True)
-        if result['Employer Pension'] > 0:
-            pdf.cell(200, 8, f"Employer Pension: £{result['Employer Pension']:,.2f}", ln=True)
-    if include_vat and result['VAT Amount'] > 0:
-        pdf.cell(200, 8, f"VAT Amount: £{result['VAT Amount']:,.2f}", ln=True)
+            pdf.cell(col_width, 5, f"Employer NI: £{result['Employer NI Deducted']:,.2f}")
     
-    # Footer with company details
-    pdf.set_y(-40)
-    pdf.set_font("Arial", size=8)
+    if include_pension:
+        pdf.cell(col_width, 5, f"Employee Pension: £{result['Employee Pension']:,.2f}", ln=True)
+        if result['Employer Pension'] > 0:
+            pdf.cell(col_width, 5, f"Employer Pension: £{result['Employer Pension']:,.2f}")
+    
+    if include_vat and result['VAT Amount'] > 0:
+        pdf.cell(col_width, 5, f"VAT Amount: £{result['VAT Amount']:,.2f}", ln=True)
+    
+    # Footer with company details - much more compact
+    pdf.set_y(-15)  # Higher up on the page
+    pdf.set_font("Arial", size=6)  # Very small font
     pdf.set_text_color(100, 100, 100)
-    pdf.line(10, pdf.get_y(), 200, pdf.get_y())  # Horizontal line
-    pdf.ln(5)
-    pdf.cell(200, 5, "Winchester House, 19 Bedford Row, London, WC1R 4EB", ln=True, align='C')
-    pdf.cell(200, 5, "VAT Reg Number: 835 7085 10 | Company Reg Number: 05008568", ln=True, align='C')
+    
+    # Single line for all footer info
+    pdf.cell(200, 3, "Winchester House, 19 Bedford Row, London | VAT: 835 7085 10 | Company: 05008568 | ", align='C')
+    
+    # Website as clickable link
     pdf.set_text_color(0, 0, 255)
-    pdf.cell(200, 5, "www.B2eConsulting.com", ln=True, align='C', link="https://www.B2eConsulting.com")
+    pdf.cell(10, 3, "www.B2eConsulting.com", link="https://www.B2eConsulting.com", align='C')
     
     return pdf.output(dest='S').encode('latin1')
 
