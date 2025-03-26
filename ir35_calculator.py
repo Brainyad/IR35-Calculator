@@ -3,8 +3,10 @@ from PIL import Image
 from fpdf import FPDF
 import matplotlib.pyplot as plt
 import numpy as np
+import base64
+from io import BytesIO
 
-# Initialize session state for live updates
+# Initialize session state
 if 'results' not in st.session_state:
     st.session_state.results = None
 if 'compare_mode' not in st.session_state:
@@ -99,47 +101,8 @@ def ir35_tax_calculator(day_rate, work_days_per_year=220, pension_contribution_p
         "VAT Amount": vat_amount
     }
 
-def generate_pdf(result, include_tax=True, include_ni=True, include_pension=True, include_vat=True):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=12)
-    
-    # Add company logo
-    try:
-        pdf.image("B2e Logo.png", 10, 8, 33)
-    except:
-        pass
-    pdf.ln(20)
-    
-    pdf.cell(200, 10, "IR35 Tax Calculation Results", ln=True, align='C')
-    
-    # Customizable content
-    pdf.cell(200, 10, f"Gross Income: £{result['Gross Income']:,.2f}", ln=True)
-    pdf.cell(200, 10, f"Net Take-Home Pay: £{result['Net Take-Home Pay']:,.2f}", ln=True)
-    
-    if include_tax:
-        pdf.cell(200, 10, f"Income Tax: £{result['Income Tax']:,.2f}", ln=True)
-    if include_ni:
-        pdf.cell(200, 10, f"Employee NI: £{result['Employee NI']:,.2f}", ln=True)
-        pdf.cell(200, 10, f"Employer NI: £{result['Employer NI Deducted']:,.2f}", ln=True)
-    if include_pension:
-        pdf.cell(200, 10, f"Employee Pension: £{result['Employee Pension']:,.2f}", ln=True)
-        pdf.cell(200, 10, f"Employer Pension: £{result['Employer Pension']:,.2f}", ln=True)
-    if include_vat and result['VAT Amount'] > 0:
-        pdf.cell(200, 10, f"VAT Amount: £{result['VAT Amount']:,.2f}", ln=True)
-    
-    # Footer
-    pdf.set_text_color(150, 150, 150)
-    pdf.set_font_size(8)
-    pdf.cell(200, 5, "B2E Consulting", ln=True, align='C')
-    pdf.cell(200, 5, "Winchester House, 19 Bedford Row, London, WC1R 4EB", ln=True, align='C')
-    pdf.cell(200, 5, "VAT Reg Number: 835 7085 10 | Company Reg Number: 05008568", ln=True, align='C')
-    pdf.cell(200, 5, "B2eConsulting.com", ln=True, align='C')
-    pdf.cell(200, 5, "Fuelling Transformation. Powered by Experts.", ln=True, align='C')
-    
-    return pdf.output(dest='S').encode('latin1')
-
-def plot_tax_breakdown(results):
+def create_pie_chart(results):
+    """Create a smaller pie chart and return as base64 encoded image"""
     labels = ["Net Pay", "Income Tax", "NI", "Student Loan", "Pension"]
     values = [
         results["Net Take-Home Pay"],
@@ -149,9 +112,80 @@ def plot_tax_breakdown(results):
         results["Employee Pension"]
     ]
     
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(4, 4))  # Smaller figure size
     ax.pie(values, labels=labels, autopct='%1.1f%%')
-    st.pyplot(fig)
+    
+    # Save to bytes buffer
+    buf = BytesIO()
+    plt.savefig(buf, format='png', bbox_inches='tight', dpi=100)
+    plt.close()
+    return base64.b64encode(buf.getvalue()).decode('latin1')
+
+def generate_pdf(result, include_tax=True, include_ni=True, include_pension=True, include_vat=True):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    
+    # Add header with logo and tagline
+    try:
+        pdf.image("B2e Logo.png", 10, 8, 33)
+    except:
+        pass
+    
+    # Add tagline to top right
+    pdf.set_xy(140, 10)
+    pdf.set_font("Arial", style='I', size=10)
+    pdf.cell(60, 5, "Fuelling Transformation. Powered by Experts.", align='R')
+    
+    # Main title
+    pdf.set_font("Arial", size=14, style='B')
+    pdf.ln(25)
+    pdf.cell(200, 10, "IR35 Tax Calculation Results", ln=True, align='C')
+    pdf.ln(10)
+    
+    # Add pie chart to PDF
+    pie_chart = create_pie_chart(result)
+    pdf.image(BytesIO(base64.b64decode(pie_chart)), x=60, w=90)
+    pdf.ln(5)
+    
+    # Results section
+    pdf.set_font("Arial", size=11)
+    pdf.cell(200, 8, f"Gross Income: £{result['Gross Income']:,.2f}", ln=True)
+    pdf.cell(200, 8, f"Net Take-Home Pay: £{result['Net Take-Home Pay']:,.2f}", ln=True)
+    pdf.ln(5)
+    
+    if include_tax:
+        pdf.cell(200, 8, f"Income Tax: £{result['Income Tax']:,.2f}", ln=True)
+    if include_ni:
+        pdf.cell(200, 8, f"Employee NI: £{result['Employee NI']:,.2f}", ln=True)
+        if result['Employer NI Deducted'] > 0:
+            pdf.cell(200, 8, f"Employer NI: £{result['Employer NI Deducted']:,.2f}", ln=True)
+    if include_pension:
+        pdf.cell(200, 8, f"Employee Pension: £{result['Employee Pension']:,.2f}", ln=True)
+        if result['Employer Pension'] > 0:
+            pdf.cell(200, 8, f"Employer Pension: £{result['Employer Pension']:,.2f}", ln=True)
+    if include_vat and result['VAT Amount'] > 0:
+        pdf.cell(200, 8, f"VAT Amount: £{result['VAT Amount']:,.2f}", ln=True)
+    
+    # Footer with company details
+    pdf.set_y(-40)
+    pdf.set_font("Arial", size=8)
+    pdf.set_text_color(100, 100, 100)
+    
+    # Horizontal line
+    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+    pdf.ln(5)
+    
+    # Company details
+    pdf.cell(200, 5, "Winchester House, 19 Bedford Row, London, WC1R 4EB", ln=True, align='C')
+    pdf.cell(200, 5, "VAT Reg Number: 835 7085 10 | Company Reg Number: 05008568", ln=True, align='C')
+    
+    # Website as clickable link
+    pdf.set_text_color(0, 0, 255)
+    pdf.cell(200, 5, "www.B2eConsulting.com", ln=True, align='C', link="https://www.B2eConsulting.com")
+    pdf.set_text_color(100, 100, 100)
+    
+    return pdf.output(dest='S').encode('latin1')
 
 # Streamlit App Configuration
 st.set_page_config(page_title="IR35 Tax Calculator", layout="wide")
@@ -269,11 +303,28 @@ if st.session_state.results:
     with col3:
         st.metric("Net Take-Home Pay", f"£{st.session_state.results['Net Take-Home Pay']:,.2f}")
     
-    # Breakdown Charts
+    # Detailed Breakdown (always visible)
+    st.subheader("Detailed Breakdown")
+    for key, value in st.session_state.results.items():
+        if key not in ["VAT Amount"] or (key == "VAT Amount" and value > 0):
+            st.write(f"**{key}:** £{value:,.2f}")
+    
+    # Charts in tabs
     tab1, tab2 = st.tabs(["Pie Chart", "Bar Chart"])
     
     with tab1:
-        plot_tax_breakdown(st.session_state.results)
+        # Smaller pie chart
+        fig, ax = plt.subplots(figsize=(4, 4))  # Reduced size
+        labels = ["Net Pay", "Income Tax", "NI", "Student Loan", "Pension"]
+        values = [
+            st.session_state.results["Net Take-Home Pay"],
+            st.session_state.results["Income Tax"],
+            st.session_state.results["Employee NI"],
+            st.session_state.results["Student Loan Repayment"],
+            st.session_state.results["Employee Pension"]
+        ]
+        ax.pie(values, labels=labels, autopct='%1.1f%%')
+        st.pyplot(fig)
     
     with tab2:
         breakdown_data = {
@@ -287,12 +338,6 @@ if st.session_state.results:
             ]
         }
         st.bar_chart(breakdown_data, x="Category", y="Amount")
-    
-    # Detailed Breakdown
-    with st.expander("Detailed Breakdown"):
-        for key, value in st.session_state.results.items():
-            if key not in ["VAT Amount"] or (key == "VAT Amount" and value > 0):
-                st.write(f"**{key}:** £{value:,.2f}")
 
 # Comparison Mode
 st.subheader("Comparison Mode")
