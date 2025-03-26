@@ -1,7 +1,5 @@
 import streamlit as st
 from PIL import Image
-import requests
-from io import BytesIO
 from fpdf import FPDF
 
 def ir35_tax_calculator(day_rate, work_days_per_year=220, pension_contribution_percent=0, student_loan_plan="None", margin_percent=0, inside_ir35=True):
@@ -84,10 +82,21 @@ def generate_pdf(result):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
+    
+    # Add company logo
+    pdf.image("B2e Logo.png", 10, 8, 33)
+    pdf.ln(20)
+    
     pdf.cell(200, 10, "IR35 Tax Calculation Results", ln=True, align='C')
     
     for key, value in result.items():
         pdf.cell(200, 10, f"{key}: £{value:,.2f}", ln=True)
+    
+    pdf.cell(200, 10, "B2E Consulting", ln=True, align='C')
+    pdf.cell(200, 10, "Winchester House, 19 Bedford Row, London, WC1R 4EB", ln=True, align='C')
+    pdf.cell(200, 10, "VAT Reg Number: 835 7085 10 | Company Reg Number: 05008568", ln=True, align='C')
+    pdf.cell(200, 10, "B2eConsulting.com", ln=True, align='C')
+    pdf.cell(200, 10, "Fuelling Transformation. Powered by Experts.", ln=True, align='C')
     
     return pdf.output(dest='S').encode('latin1')
 
@@ -95,6 +104,10 @@ def generate_pdf(result):
 st.set_page_config(page_title="IR35 Tax Calculator", layout="wide")
 
 st.title("IR35 Tax Calculator")
+
+# Add company logo
+logo = Image.open("B2e Logo.png")
+st.image(logo, width=200)
 
 # User Input
 col1, col2 = st.columns(2)
