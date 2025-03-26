@@ -3,7 +3,6 @@ from PIL import Image
 from fpdf import FPDF
 import matplotlib.pyplot as plt
 import numpy as np
-import base64
 from io import BytesIO
 
 # Initialize session state
@@ -102,7 +101,7 @@ def ir35_tax_calculator(day_rate, work_days_per_year=220, pension_contribution_p
     }
 
 def create_pie_chart(results):
-    """Create a smaller pie chart and return as base64 encoded image"""
+    """Create a smaller pie chart and return image buffer"""
     labels = ["Net Pay", "Income Tax", "NI", "Student Loan", "Pension"]
     values = [
         results["Net Take-Home Pay"],
@@ -112,27 +111,28 @@ def create_pie_chart(results):
         results["Employee Pension"]
     ]
     
-    fig, ax = plt.subplots(figsize=(4, 4))  # Smaller figure size
-    ax.pie(values, labels=labels, autopct='%1.1f%%')
+    fig, ax = plt.subplots(figsize=(3, 3))  # 50% smaller than before
+    ax.pie(values, labels=labels, autopct='%1.1f%%', textprops={'fontsize': 6})
+    plt.tight_layout()
     
-    # Save to bytes buffer
     buf = BytesIO()
-    plt.savefig(buf, format='png', bbox_inches='tight', dpi=100)
+    plt.savefig(buf, format='png', bbox_inches='tight', dpi=150)
     plt.close()
-    return base64.b64encode(buf.getvalue()).decode('latin1')
+    buf.seek(0)
+    return buf
 
 def generate_pdf(result, include_tax=True, include_ni=True, include_pension=True, include_vat=True):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
     
-    # Add header with logo and tagline
+    # Header with logo and tagline
     try:
         pdf.image("B2e Logo.png", 10, 8, 33)
     except:
         pass
     
-    # Add tagline to top right
+    # Tagline in top right
     pdf.set_xy(140, 10)
     pdf.set_font("Arial", style='I', size=10)
     pdf.cell(60, 5, "Fuelling Transformation. Powered by Experts.", align='R')
@@ -143,10 +143,9 @@ def generate_pdf(result, include_tax=True, include_ni=True, include_pension=True
     pdf.cell(200, 10, "IR35 Tax Calculation Results", ln=True, align='C')
     pdf.ln(10)
     
-    # Add pie chart to PDF
+    # Add pie chart (50% smaller)
     pie_chart = create_pie_chart(result)
-    pdf.image(BytesIO(base64.b64decode(pie_chart)), x=60, w=90)
-    pdf.ln(5)
+    pdf.image(pie_chart, x=60, w=70)  # Reduced width
     
     # Results section
     pdf.set_font("Arial", size=11)
@@ -171,19 +170,12 @@ def generate_pdf(result, include_tax=True, include_ni=True, include_pension=True
     pdf.set_y(-40)
     pdf.set_font("Arial", size=8)
     pdf.set_text_color(100, 100, 100)
-    
-    # Horizontal line
-    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+    pdf.line(10, pdf.get_y(), 200, pdf.get_y())  # Horizontal line
     pdf.ln(5)
-    
-    # Company details
     pdf.cell(200, 5, "Winchester House, 19 Bedford Row, London, WC1R 4EB", ln=True, align='C')
     pdf.cell(200, 5, "VAT Reg Number: 835 7085 10 | Company Reg Number: 05008568", ln=True, align='C')
-    
-    # Website as clickable link
     pdf.set_text_color(0, 0, 255)
     pdf.cell(200, 5, "www.B2eConsulting.com", ln=True, align='C', link="https://www.B2eConsulting.com")
-    pdf.set_text_color(100, 100, 100)
     
     return pdf.output(dest='S').encode('latin1')
 
@@ -314,7 +306,7 @@ if st.session_state.results:
     
     with tab1:
         # Smaller pie chart
-        fig, ax = plt.subplots(figsize=(4, 4))  # Reduced size
+        fig, ax = plt.subplots(figsize=(3, 3))  # 50% smaller
         labels = ["Net Pay", "Income Tax", "NI", "Student Loan", "Pension"]
         values = [
             st.session_state.results["Net Take-Home Pay"],
@@ -323,7 +315,7 @@ if st.session_state.results:
             st.session_state.results["Student Loan Repayment"],
             st.session_state.results["Employee Pension"]
         ]
-        ax.pie(values, labels=labels, autopct='%1.1f%%')
+        ax.pie(values, labels=labels, autopct='%1.1f%%', textprops={'fontsize': 6})
         st.pyplot(fig)
     
     with tab2:
