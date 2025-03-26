@@ -3,6 +3,7 @@ from PIL import Image
 from fpdf import FPDF
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 from io import BytesIO
 
 # Initialize session state
@@ -101,7 +102,7 @@ def ir35_tax_calculator(day_rate, work_days_per_year=220, pension_contribution_p
     }
 
 def create_pie_chart(results):
-    """Create a smaller pie chart and return image buffer"""
+    """Create a smaller pie chart and save to temporary file"""
     labels = ["Net Pay", "Income Tax", "NI", "Student Loan", "Pension"]
     values = [
         results["Net Take-Home Pay"],
@@ -111,15 +112,15 @@ def create_pie_chart(results):
         results["Employee Pension"]
     ]
     
-    fig, ax = plt.subplots(figsize=(3, 3))  # 50% smaller than before
+    fig, ax = plt.subplots(figsize=(3, 3))  # 50% smaller
     ax.pie(values, labels=labels, autopct='%1.1f%%', textprops={'fontsize': 6})
     plt.tight_layout()
     
-    buf = BytesIO()
-    plt.savefig(buf, format='png', bbox_inches='tight', dpi=150)
+    # Save to temporary file
+    temp_file = "temp_pie_chart.png"
+    plt.savefig(temp_file, format='png', bbox_inches='tight', dpi=150)
     plt.close()
-    buf.seek(0)
-    return buf
+    return temp_file
 
 def generate_pdf(result, include_tax=True, include_ni=True, include_pension=True, include_vat=True):
     pdf = FPDF()
@@ -144,8 +145,12 @@ def generate_pdf(result, include_tax=True, include_ni=True, include_pension=True
     pdf.ln(10)
     
     # Add pie chart (50% smaller)
-    pie_chart = create_pie_chart(result)
-    pdf.image(pie_chart, x=60, w=70)  # Reduced width
+    pie_chart_file = create_pie_chart(result)
+    pdf.image(pie_chart_file, x=60, w=70)  # Reduced width
+    
+    # Clean up temporary file
+    if os.path.exists(pie_chart_file):
+        os.remove(pie_chart_file)
     
     # Results section
     pdf.set_font("Arial", size=11)
