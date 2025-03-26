@@ -2,6 +2,8 @@ import streamlit as st
 from PIL import Image
 from fpdf import FPDF
 import time
+import matplotlib.pyplot as plt
+import numpy as np
 
 def ir35_tax_calculator(day_rate, work_days_per_year=220, pension_contribution_percent=0, student_loan_plan="None", margin_percent=0, status="Inside IR35"):
     """Calculate take-home pay for consultants inside or outside IR35."""
@@ -112,6 +114,10 @@ logo = Image.open("B2e Logo.png")
 st.image(logo, width=200)
 
 st.title("IR35 Tax Calculator")
+
+# Progress Bar
+progress_bar = st.progress(0)
+progress_bar.progress(50)
 
 # User Input
 col1, col2 = st.columns(2)
