@@ -1,8 +1,9 @@
 import streamlit as st
 from PIL import Image
 from fpdf import FPDF
+import time
 
-def ir35_tax_calculator(day_rate, work_days_per_year=220, pension_contribution_percent=0, student_loan_plan="None", margin_percent=0, inside_ir35=True):
+def ir35_tax_calculator(day_rate, work_days_per_year=220, pension_contribution_percent=0, student_loan_plan="None", margin_percent=0, status="Inside IR35"):
     """Calculate take-home pay for consultants inside or outside IR35."""
     
     # Constants
@@ -26,6 +27,7 @@ def ir35_tax_calculator(day_rate, work_days_per_year=220, pension_contribution_p
     
     # Employer NI (only applies inside IR35)
     employer_ni_rate = 0.133
+    inside_ir35 = status == "Inside IR35"
     employer_ni = (annual_income - ni_threshold) * employer_ni_rate if annual_income > ni_threshold and inside_ir35 else 0
     annual_income -= employer_ni  # Deduct Employer NI before tax
     
@@ -92,22 +94,24 @@ def generate_pdf(result):
     for key, value in result.items():
         pdf.cell(200, 10, f"{key}: £{value:,.2f}", ln=True)
     
-    pdf.cell(200, 10, "B2E Consulting", ln=True, align='C')
-    pdf.cell(200, 10, "Winchester House, 19 Bedford Row, London, WC1R 4EB", ln=True, align='C')
-    pdf.cell(200, 10, "VAT Reg Number: 835 7085 10 | Company Reg Number: 05008568", ln=True, align='C')
-    pdf.cell(200, 10, "B2eConsulting.com", ln=True, align='C')
-    pdf.cell(200, 10, "Fuelling Transformation. Powered by Experts.", ln=True, align='C')
+    pdf.set_text_color(150, 150, 150)
+    pdf.set_font_size(8)
+    pdf.cell(200, 5, "B2E Consulting", ln=True, align='C')
+    pdf.cell(200, 5, "Winchester House, 19 Bedford Row, London, WC1R 4EB", ln=True, align='C')
+    pdf.cell(200, 5, "VAT Reg Number: 835 7085 10 | Company Reg Number: 05008568", ln=True, align='C')
+    pdf.cell(200, 5, "B2eConsulting.com", ln=True, align='C')
+    pdf.cell(200, 5, "Fuelling Transformation. Powered by Experts.", ln=True, align='C')
     
     return pdf.output(dest='S').encode('latin1')
 
 # Streamlit Web App
 st.set_page_config(page_title="IR35 Tax Calculator", layout="wide")
 
-st.title("IR35 Tax Calculator")
-
 # Add company logo
 logo = Image.open("B2e Logo.png")
 st.image(logo, width=200)
+
+st.title("IR35 Tax Calculator")
 
 # User Input
 col1, col2 = st.columns(2)
@@ -117,17 +121,15 @@ with col1:
     work_days_per_year = st.number_input("Enter workdays per year:", min_value=1, max_value=365, value=220)
     pension_contribution_percent = st.number_input("Pension Contribution (%):", min_value=0, value=0)
     margin_percent = st.number_input("Company Margin Deduction (%):", min_value=0, value=10)
-    inside_ir35 = st.checkbox("Inside IR35", value=True)
+    status = st.radio("IR35 Status", ["Inside IR35", "Outside IR35"], index=0)
 
 with col2:
     student_loan_plan = st.selectbox("Student Loan Plan:", ["None", "Plan 1", "Plan 2", "Plan 4", "Plan 5", "Postgraduate Loan"])
 
 if st.button("Calculate"):
-    result = ir35_tax_calculator(day_rate, work_days_per_year, pension_contribution_percent, student_loan_plan, margin_percent, inside_ir35)
-    
+    result = ir35_tax_calculator(day_rate, work_days_per_year, pension_contribution_percent, student_loan_plan, margin_percent, status)
     st.subheader("Results")
     for key, value in result.items():
         st.write(f"**{key}:** £{value:,.2f}")
-    
     pdf_data = generate_pdf(result)
     st.download_button("Download Results as PDF", data=pdf_data, file_name="IR35_Tax_Calculation.pdf", mime="application/pdf")
