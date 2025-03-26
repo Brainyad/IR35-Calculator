@@ -101,85 +101,22 @@ def ir35_tax_calculator(day_rate, work_days_per_year=220, pension_contribution_p
         "VAT Amount": vat_amount
     }
 
-def create_pie_chart(results):
-    """Create a very small pie chart and save to temporary file"""
-    labels = ["Net Pay", "Income Tax", "NI", "Student Loan", "Pension"]
-    values = [
-        results["Net Take-Home Pay"],
-        results["Income Tax"],
-        results["Employee NI"],
-        results["Student Loan Repayment"],
-        results["Employee Pension"]
-    ]
-    
-    # Tiny figure size (10% of original)
-    fig, ax = plt.subplots(figsize=(1.5, 1.5))
-    ax.pie(values, labels=labels, autopct='%1.0f%%', textprops={'fontsize': 4})
-    plt.tight_layout(pad=0.5)
-    
-    # Save to temporary file
-    temp_file = "temp_pie_chart.png"
-    plt.savefig(temp_file, format='png', bbox_inches='tight', dpi=300)
-    plt.close()
-    return temp_file
-
-def generate_pdf(result, include_tax=True, include_ni=True, include_pension=True, include_vat=True):
+def generate_pdf(result):
+    """Generate PDF report without pie chart or footer"""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
     
-    # Header with logo and tagline
-    try:
-        pdf.image("B2e Logo.png", 10, 8, 25)  # Smaller logo
-    except:
-        pass
-    
-    # Tagline in top right
-    pdf.set_xy(120, 8)
-    pdf.set_font("Arial", style='I', size=7)
-    pdf.cell(80, 4, "Fuelling Transformation. Powered by Experts.", align='R')
-    
     # Main title
-    pdf.set_font("Arial", size=12, style='B')
-    pdf.ln(15)
-    pdf.cell(200, 8, "IR35 Tax Calculation Results", ln=True, align='C')
-    pdf.ln(5)
-    
-    # Add tiny pie chart (10% original size)
-    pie_chart_file = create_pie_chart(result)
-    pdf.image(pie_chart_file, x=85, w=20)  # Very small and centered
-    if os.path.exists(pie_chart_file):
-        os.remove(pie_chart_file)
+    pdf.set_font("Arial", size=14, style='B')
+    pdf.cell(200, 10, "IR35 Tax Calculation Results", ln=True, align='C')
+    pdf.ln(10)
     
     # Results section
-    pdf.set_font("Arial", size=10)
-    pdf.cell(200, 6, f"Gross Income: £{result['Gross Income']:,.2f}", ln=True)
-    pdf.cell(200, 6, f"Net Take-Home Pay: £{result['Net Take-Home Pay']:,.2f}", ln=True)
-    pdf.ln(5)
-    
-    # Detailed breakdown
-    pdf.set_font("Arial", size=9)
-    if include_tax:
-        pdf.cell(200, 5, f"Income Tax: £{result['Income Tax']:,.2f}", ln=True)
-    if include_ni:
-        pdf.cell(200, 5, f"Employee NI: £{result['Employee NI']:,.2f}", ln=True)
-        if result['Employer NI Deducted'] > 0:
-            pdf.cell(200, 5, f"Employer NI: £{result['Employer NI Deducted']:,.2f}", ln=True)
-    if include_pension:
-        pdf.cell(200, 5, f"Employee Pension: £{result['Employee Pension']:,.2f}", ln=True)
-        if result['Employer Pension'] > 0:
-            pdf.cell(200, 5, f"Employer Pension: £{result['Employer Pension']:,.2f}", ln=True)
-    if include_vat and result['VAT Amount'] > 0:
-        pdf.cell(200, 5, f"VAT Amount: £{result['VAT Amount']:,.2f}", ln=True)
-    
-    # Fixed footer - properly positioned and formatted
-    pdf.set_y(-15)  # 15mm from bottom
-    pdf.set_font("Arial", size=6)
-    pdf.set_text_color(100, 100, 100)
-    pdf.cell(200, 3, "Winchester House, 19 Bedford Row, London, WC1R 4EB", ln=True, align='C')
-    pdf.cell(200, 3, "VAT: 835 7085 10 | Company: 05008568", ln=True, align='C')
-    pdf.set_text_color(0, 0, 255)
-    pdf.cell(200, 3, "www.B2eConsulting.com", ln=True, align='C', link="https://www.B2eConsulting.com")
+    pdf.set_font("Arial", size=11)
+    for key, value in result.items():
+        if key not in ["VAT Amount"] or (key == "VAT Amount" and value > 0):
+            pdf.cell(200, 8, f"{key}: £{value:,.2f}", ln=True)
     
     return pdf.output(dest='S').encode('latin1')
 
@@ -305,12 +242,11 @@ if st.session_state.results:
         if key not in ["VAT Amount"] or (key == "VAT Amount" and value > 0):
             st.write(f"**{key}:** £{value:,.2f}")
     
-    # Charts in tabs
+    # Charts in tabs with 65% smaller pie chart
     tab1, tab2 = st.tabs(["Pie Chart", "Bar Chart"])
     
     with tab1:
-        # Very small pie chart
-        fig, ax = plt.subplots(figsize=(3, 3))
+        fig, ax = plt.subplots(figsize=(4, 4))  # 65% smaller than original
         labels = ["Net Pay", "Income Tax", "NI", "Student Loan", "Pension"]
         values = [
             st.session_state.results["Net Take-Home Pay"],
@@ -319,7 +255,7 @@ if st.session_state.results:
             st.session_state.results["Student Loan Repayment"],
             st.session_state.results["Employee Pension"]
         ]
-        ax.pie(values, labels=labels, autopct='%1.0f%%', textprops={'fontsize': 6})
+        ax.pie(values, labels=labels, autopct='%1.1f%%', textprops={'fontsize': 8})
         st.pyplot(fig)
     
     with tab2:
@@ -334,6 +270,16 @@ if st.session_state.results:
             ]
         }
         st.bar_chart(breakdown_data, x="Category", y="Amount")
+    
+    # Generate Report Button - RESTORED
+    if st.button("Generate PDF Report"):
+        pdf_data = generate_pdf(st.session_state.results)
+        st.download_button(
+            "Download Report",
+            data=pdf_data,
+            file_name="IR35_Tax_Report.pdf",
+            mime="application/pdf"
+        )
 
 # Comparison Mode
 st.subheader("Comparison Mode")
@@ -377,25 +323,3 @@ if compare:
             "Net Pay": [result1['Net Take-Home Pay'], result2['Net Take-Home Pay']]
         }
         st.bar_chart(compare_data, x="Scenario", y="Net Pay")
-
-# PDF Report Generation
-st.subheader("Report Options")
-include_tax = st.checkbox("Include Income Tax in PDF", value=True)
-include_ni = st.checkbox("Include NI in PDF", value=True)
-include_pension = st.checkbox("Include Pension in PDF", value=True)
-include_vat = st.checkbox("Include VAT in PDF", value=True)
-
-if st.session_state.results and st.button("Generate PDF Report"):
-    pdf_data = generate_pdf(
-        st.session_state.results,
-        include_tax=include_tax,
-        include_ni=include_ni,
-        include_pension=include_pension,
-        include_vat=include_vat
-    )
-    st.download_button(
-        "Download Full Report",
-        data=pdf_data,
-        file_name="IR35_Tax_Report.pdf",
-        mime="application/pdf"
-    )
