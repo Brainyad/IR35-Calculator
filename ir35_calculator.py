@@ -102,7 +102,7 @@ def ir35_tax_calculator(day_rate, work_days_per_year=220, pension_contribution_p
     }
 
 def create_pie_chart(results):
-    """Create a smaller pie chart and save to temporary file"""
+    """Create a very small pie chart and save to temporary file"""
     labels = ["Net Pay", "Income Tax", "NI", "Student Loan", "Pension"]
     values = [
         results["Net Take-Home Pay"],
@@ -112,13 +112,14 @@ def create_pie_chart(results):
         results["Employee Pension"]
     ]
     
-    fig, ax = plt.subplots(figsize=(3, 3))  # 50% smaller
-    ax.pie(values, labels=labels, autopct='%1.1f%%', textprops={'fontsize': 6})
-    plt.tight_layout()
+    # Tiny figure size (10% of original)
+    fig, ax = plt.subplots(figsize=(1.5, 1.5))
+    ax.pie(values, labels=labels, autopct='%1.0f%%', textprops={'fontsize': 4})
+    plt.tight_layout(pad=0.5)
     
     # Save to temporary file
     temp_file = "temp_pie_chart.png"
-    plt.savefig(temp_file, format='png', bbox_inches='tight', dpi=150)
+    plt.savefig(temp_file, format='png', bbox_inches='tight', dpi=300)
     plt.close()
     return temp_file
 
@@ -127,68 +128,58 @@ def generate_pdf(result, include_tax=True, include_ni=True, include_pension=True
     pdf.add_page()
     pdf.set_font("Arial", size=12)
     
-    # Header with logo and tagline - more compact layout
+    # Header with logo and tagline
     try:
         pdf.image("B2e Logo.png", 10, 8, 25)  # Smaller logo
     except:
         pass
     
-    # Tagline in top right - smaller and tighter
-    pdf.set_xy(120, 10)
-    pdf.set_font("Arial", style='I', size=8)
+    # Tagline in top right
+    pdf.set_xy(120, 8)
+    pdf.set_font("Arial", style='I', size=7)
     pdf.cell(80, 4, "Fuelling Transformation. Powered by Experts.", align='R')
     
-    # Main title - less spacing
-    pdf.set_font("Arial", size=12, style='B')  # Smaller title
-    pdf.ln(15)  # Reduced spacing
+    # Main title
+    pdf.set_font("Arial", size=12, style='B')
+    pdf.ln(15)
     pdf.cell(200, 8, "IR35 Tax Calculation Results", ln=True, align='C')
-    pdf.ln(5)  # Reduced spacing
+    pdf.ln(5)
     
-    # Add pie chart - smaller and positioned better
+    # Add tiny pie chart (10% original size)
     pie_chart_file = create_pie_chart(result)
-    pdf.image(pie_chart_file, x=65, w=80)  # Centered and slightly larger
+    pdf.image(pie_chart_file, x=85, w=20)  # Very small and centered
     if os.path.exists(pie_chart_file):
         os.remove(pie_chart_file)
     
-    # Results section - tighter layout
-    pdf.set_font("Arial", size=10)  # Smaller font
-    pdf.ln(5)  # Reduced spacing
+    # Results section
+    pdf.set_font("Arial", size=10)
+    pdf.cell(200, 6, f"Gross Income: £{result['Gross Income']:,.2f}", ln=True)
+    pdf.cell(200, 6, f"Net Take-Home Pay: £{result['Net Take-Home Pay']:,.2f}", ln=True)
+    pdf.ln(5)
     
-    # Key metrics first
-    pdf.cell(100, 6, f"Gross Income: £{result['Gross Income']:,.2f}", ln=True)
-    pdf.cell(100, 6, f"Net Take-Home Pay: £{result['Net Take-Home Pay']:,.2f}", ln=True)
-    pdf.ln(3)
-    
-    # Detailed breakdown - two columns to save space
-    col_width = 90
+    # Detailed breakdown
     pdf.set_font("Arial", size=9)
-    
     if include_tax:
-        pdf.cell(col_width, 5, f"Income Tax: £{result['Income Tax']:,.2f}")
+        pdf.cell(200, 5, f"Income Tax: £{result['Income Tax']:,.2f}", ln=True)
     if include_ni:
-        pdf.cell(col_width, 5, f"Employee NI: £{result['Employee NI']:,.2f}", ln=True)
+        pdf.cell(200, 5, f"Employee NI: £{result['Employee NI']:,.2f}", ln=True)
         if result['Employer NI Deducted'] > 0:
-            pdf.cell(col_width, 5, f"Employer NI: £{result['Employer NI Deducted']:,.2f}")
-    
+            pdf.cell(200, 5, f"Employer NI: £{result['Employer NI Deducted']:,.2f}", ln=True)
     if include_pension:
-        pdf.cell(col_width, 5, f"Employee Pension: £{result['Employee Pension']:,.2f}", ln=True)
+        pdf.cell(200, 5, f"Employee Pension: £{result['Employee Pension']:,.2f}", ln=True)
         if result['Employer Pension'] > 0:
-            pdf.cell(col_width, 5, f"Employer Pension: £{result['Employer Pension']:,.2f}")
-    
+            pdf.cell(200, 5, f"Employer Pension: £{result['Employer Pension']:,.2f}", ln=True)
     if include_vat and result['VAT Amount'] > 0:
-        pdf.cell(col_width, 5, f"VAT Amount: £{result['VAT Amount']:,.2f}", ln=True)
+        pdf.cell(200, 5, f"VAT Amount: £{result['VAT Amount']:,.2f}", ln=True)
     
-    # Footer with company details - much more compact
-    pdf.set_y(-15)  # Higher up on the page
-    pdf.set_font("Arial", size=6)  # Very small font
+    # Fixed footer - properly positioned and formatted
+    pdf.set_y(-15)  # 15mm from bottom
+    pdf.set_font("Arial", size=6)
     pdf.set_text_color(100, 100, 100)
-    
-    # Single line for all footer info
-    pdf.cell(200, 3, "Winchester House, 19 Bedford Row, London | VAT: 835 7085 10 | Company: 05008568 | ", align='C')
-    
-    # Website as clickable link
+    pdf.cell(200, 3, "Winchester House, 19 Bedford Row, London, WC1R 4EB", ln=True, align='C')
+    pdf.cell(200, 3, "VAT: 835 7085 10 | Company: 05008568", ln=True, align='C')
     pdf.set_text_color(0, 0, 255)
-    pdf.cell(10, 3, "www.B2eConsulting.com", link="https://www.B2eConsulting.com", align='C')
+    pdf.cell(200, 3, "www.B2eConsulting.com", ln=True, align='C', link="https://www.B2eConsulting.com")
     
     return pdf.output(dest='S').encode('latin1')
 
@@ -318,8 +309,8 @@ if st.session_state.results:
     tab1, tab2 = st.tabs(["Pie Chart", "Bar Chart"])
     
     with tab1:
-        # Smaller pie chart
-        fig, ax = plt.subplots(figsize=(3, 3))  # 50% smaller
+        # Very small pie chart
+        fig, ax = plt.subplots(figsize=(3, 3))
         labels = ["Net Pay", "Income Tax", "NI", "Student Loan", "Pension"]
         values = [
             st.session_state.results["Net Take-Home Pay"],
@@ -328,7 +319,7 @@ if st.session_state.results:
             st.session_state.results["Student Loan Repayment"],
             st.session_state.results["Employee Pension"]
         ]
-        ax.pie(values, labels=labels, autopct='%1.1f%%', textprops={'fontsize': 6})
+        ax.pie(values, labels=labels, autopct='%1.0f%%', textprops={'fontsize': 6})
         st.pyplot(fig)
     
     with tab2:
