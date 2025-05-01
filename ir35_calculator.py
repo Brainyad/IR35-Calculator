@@ -58,15 +58,27 @@ def calculate_client_rate(base_rate, margin_percent):
     """Calculate Client Rate from Base Rate and margin"""
     return base_rate / (1 - margin_percent/100)
 
-def calculate_pay_rate(base_rate, employer_ni_percent=15, employer_pension_percent=3, apprentice_levy_percent=0.5):
-    """Calculate Pay Rate from Base Rate with employer deductions"""
-    total_deductions = (employer_ni_percent + employer_pension_percent + apprentice_levy_percent) / 100
-    return base_rate * (1 - total_deductions)
+def calculate_pay_rate(base_rate):
+    """Calculate Pay Rate from Base Rate with employer deductions (Inside IR35)"""
+    # Total employer deductions = 15% NI + 3% Pension + 0.5% Levy = 18.5%
+    return base_rate / 1.185
 
-def calculate_base_rate_from_pay(pay_rate, employer_ni_percent=15, employer_pension_percent=3, apprentice_levy_percent=0.5):
-    """Calculate Base Rate from Pay Rate"""
-    total_deductions = (employer_ni_percent + employer_pension_percent + apprentice_levy_percent) / 100
-    return pay_rate / (1 - total_deductions)
+def calculate_base_rate_from_pay(pay_rate):
+    """Calculate Base Rate from Pay Rate (Inside IR35)"""
+    return pay_rate * 1.185
+
+def calculate_employer_deductions(base_rate):
+    """Calculate employer NI, pension, and levy amounts"""
+    employer_ni = base_rate * 0.15
+    employer_pension = base_rate * 0.03
+    apprentice_levy = base_rate * 0.005
+    total_deductions = employer_ni + employer_pension + apprentice_levy
+    return {
+        "Employer NI": round(employer_ni),
+        "Employer Pension": round(employer_pension),
+        "Apprentice Levy": round(apprentice_levy),
+        "Total Employer Deductions": round(total_deductions)
+    }
 
 def ir35_tax_calculator(pay_rate, working_days, pension_contribution_percent=5, 
                        student_loan_plan="None", status="Inside IR35", vat_registered=False):
@@ -144,7 +156,7 @@ def ir35_tax_calculator(pay_rate, working_days, pension_contribution_percent=5,
         "Working Days": working_days
     }
 
-def generate_pdf(result, calculation_mode, client_rate=None, base_rate=None, pay_rate=None):
+def generate_pdf(result, calculation_mode, client_rate=None, base_rate=None, pay_rate=None, margin=None, employer_deductions=None):
     """Generate PDF report with all results and disclaimer"""
     pdf = FPDF()
     pdf.add_page()
@@ -162,16 +174,30 @@ def generate_pdf(result, calculation_mode, client_rate=None, base_rate=None, pay
     
     if calculation_mode == "Client Rate":
         pdf.cell(200, 8, f"Client Rate: £{round(client_rate)}", ln=True)
+        pdf.cell(200, 8, f"Margin: {margin}% (£{round(client_rate - base_rate)})", ln=True)
         pdf.cell(200, 8, f"Base Rate: £{round(base_rate)}", ln=True)
     elif calculation_mode == "Base Rate":
         pdf.cell(200, 8, f"Base Rate: £{round(base_rate)}", ln=True)
+        pdf.cell(200, 8, f"Margin: {margin}% (£{round(client_rate - base_rate)})", ln=True)
         pdf.cell(200, 8, f"Client Rate: £{round(client_rate)}", ln=True)
     else:
         pdf.cell(200, 8, f"Pay Rate: £{round(pay_rate)}", ln=True)
         pdf.cell(200, 8, f"Base Rate: £{round(base_rate)}", ln=True)
+        pdf.cell(200, 8, f"Margin: {margin}% (£{round(client_rate - base_rate)})", ln=True)
         pdf.cell(200, 8, f"Client Rate: £{round(client_rate)}", ln=True)
     
     pdf.ln(5)
+    
+    # Employer Deductions (Inside IR35 only)
+    if employer_deductions:
+        pdf.set_font("Arial", size=12, style='B')
+        pdf.cell(200, 8, "Employer Deductions", ln=True)
+        pdf.set_font("Arial", size=11)
+        pdf.cell(200, 8, f"Employer NI (15%): £{employer_deductions['Employer NI']}", ln=True)
+        pdf.cell(200, 8, f"Employer Pension (3%): £{employer_deductions['Employer Pension']}", ln=True)
+        pdf.cell(200, 8, f"Apprentice Levy (0.5%): £{employer_deductions['Apprentice Levy']}", ln=True)
+        pdf.cell(200, 8, f"Total Employer Deductions: £{employer_deductions['Total Employer Deductions']}", ln=True)
+        pdf.ln(5)
     
     # Project Breakdown
     pdf.set_font("Arial", size=12, style='B')
@@ -364,14 +390,6 @@ with st.form("calculator_form"):
             help="Percentage of salary going to your pension"
         )
         
-        employer_pension_percent = st.number_input(
-            "Employer Pension Contribution (%):", 
-            min_value=0.0, 
-            value=3.0,
-            step=0.5,
-            help="Standard UK employer contribution is 3%+"
-        )
-        
         student_loan_plan = st.selectbox(
             "Student Loan Plan:", 
             ["None", "Plan 1", "Plan 2", "Plan 4", "Plan 5", "Postgraduate Loan"],
@@ -409,6 +427,11 @@ with st.form("calculator_form"):
             st.session_state.base_rate = base_rate if 'base_rate' in locals() else None
             st.session_state.pay_rate = pay_rate
             st.session_state.working_days = working_days
+            st.session_state.margin_percent = margin_percent if 'margin_percent' in locals() else None
+            if status == "Inside IR35":
+                st.session_state.employer_deductions = calculate_employer_deductions(base_rate)
+            else:
+                st.session_state.employer_deductions = None
 
 # Results Display
 if st.session_state.results:
@@ -429,6 +452,19 @@ if st.session_state.results:
             st.metric("Calculated Base Rate", f"£{round(st.session_state.base_rate)}")
     with col3:
         st.metric("Pay Rate", f"£{round(st.session_state.pay_rate)}")
+    
+    # Margin and Employer Deductions
+    st.write("### Margin & Deductions")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write(f"**Margin:** {st.session_state.margin_percent}% (£{round(st.session_state.client_rate - st.session_state.base_rate)})")
+    with col2:
+        if st.session_state.employer_deductions:
+            st.write("**Employer Deductions (Inside IR35):**")
+            st.write(f"- Employer NI (15%): £{st.session_state.employer_deductions['Employer NI']}")
+            st.write(f"- Employer Pension (3%): £{st.session_state.employer_deductions['Employer Pension']}")
+            st.write(f"- Apprentice Levy (0.5%): £{st.session_state.employer_deductions['Apprentice Levy']}")
+            st.write(f"- **Total Deductions:** £{st.session_state.employer_deductions['Total Employer Deductions']}")
     
     # Time Period Breakdown
     st.write("### Project Breakdown")
@@ -481,7 +517,9 @@ if st.session_state.results:
             st.session_state.calculation_mode,
             st.session_state.client_rate,
             st.session_state.base_rate,
-            st.session_state.pay_rate
+            st.session_state.pay_rate,
+            st.session_state.margin_percent,
+            st.session_state.employer_deductions
         )
         st.download_button(
             "Download Report",
@@ -532,6 +570,8 @@ if compare:
         working_days = calculate_working_days(start_date, end_date, days_per_week, bank_holidays)
         
         # Inside IR35 scenario
+        inside_base_rate = calculate_base_rate_from_pay(inside_pay_rate)
+        inside_employer_deductions = calculate_employer_deductions(inside_base_rate)
         inside_result = ir35_tax_calculator(
             inside_pay_rate, working_days, pension_contribution_percent,
             student_loan_plan, "Inside IR35", False
@@ -548,6 +588,11 @@ if compare:
         with col1:
             st.write("### Inside IR35")
             st.write(f"**Pay Rate:** £{round(inside_pay_rate)}")
+            st.write(f"**Base Rate:** £{round(inside_base_rate)}")
+            st.write("**Employer Deductions:**")
+            st.write(f"- NI (15%): £{inside_employer_deductions['Employer NI']}")
+            st.write(f"- Pension (3%): £{inside_employer_deductions['Employer Pension']}")
+            st.write(f"- Levy (0.5%): £{inside_employer_deductions['Apprentice Levy']}")
             st.write(f"**Daily Net:** £{round(inside_result['Net Take-Home Pay']/working_days)}")
             st.write(f"**Monthly Net (20 days):** £{round(inside_result['Net Take-Home Pay']/working_days*20)}")
             st.write(f"**Project Net:** £{round(inside_result['Net Take-Home Pay'])}")
@@ -555,6 +600,8 @@ if compare:
         with col2:
             st.write("### Outside IR35")
             st.write(f"**Base Rate:** £{round(outside_base_rate)}")
+            st.write(f"**Pay Rate:** £{round(outside_base_rate)} (same as Base Rate)")
+            st.write(f"**VAT Registered:** {'Yes' if outside_vat else 'No'}")
             st.write(f"**Daily Net:** £{round(outside_result['Net Take-Home Pay']/working_days)}")
             st.write(f"**Monthly Net (20 days):** £{round(outside_result['Net Take-Home Pay']/working_days*20)}")
             st.write(f"**Project Net:** £{round(outside_result['Net Take-Home Pay'])}")
