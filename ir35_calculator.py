@@ -29,6 +29,8 @@ def get_uk_bank_holidays():
         ]
 
 def calculate_working_days(start_date, end_date, days_per_week, bank_holidays):
+    if start_date >= end_date:
+        return 0
     total_days = (end_date - start_date).days + 1
     working_days = 0
     
@@ -84,6 +86,18 @@ def calculate_employer_deductions(base_rate, working_days):
         "Total Employer Pension": round(total_pension),
         "Total Apprentice Levy": round(total_levy),
         "Total Employer Deductions": round((daily_ni + daily_pension + daily_levy) * working_days)
+    }
+
+def calculate_margin(client_rate, base_rate, working_days):
+    """Calculate margin amounts (daily and total)"""
+    daily_margin = client_rate - base_rate
+    total_margin = daily_margin * working_days
+    margin_percent = ((client_rate - base_rate) / client_rate) * 100
+    
+    return {
+        "Daily Margin": round(daily_margin),
+        "Total Margin": round(total_margin),
+        "Margin Percentage": round(margin_percent, 1)
     }
 
 def ir35_tax_calculator(pay_rate, working_days, pension_contribution_percent=5, 
@@ -194,16 +208,16 @@ def generate_pdf(result, calculation_mode, client_rate=None, base_rate=None, pay
     else:
         if calculation_mode == "Client Rate":
             pdf.cell(200, 8, f"Client Rate: £{round(client_rate)}", ln=True)
-            pdf.cell(200, 8, f"Margin: {margin}% (£{round(client_rate - base_rate)})", ln=True)
+            pdf.cell(200, 8, f"Margin: {margin['Margin Percentage']}% (£{margin['Daily Margin']}/day)", ln=True)
             pdf.cell(200, 8, f"Base Rate: £{round(base_rate)}", ln=True)
         elif calculation_mode == "Base Rate":
             pdf.cell(200, 8, f"Base Rate: £{round(base_rate)}", ln=True)
-            pdf.cell(200, 8, f"Margin: {margin}% (£{round(client_rate - base_rate)})", ln=True)
+            pdf.cell(200, 8, f"Margin: {margin['Margin Percentage']}% (£{margin['Daily Margin']}/day)", ln=True)
             pdf.cell(200, 8, f"Client Rate: £{round(client_rate)}", ln=True)
         else:
             pdf.cell(200, 8, f"Pay Rate: £{round(pay_rate)}", ln=True)
             pdf.cell(200, 8, f"Base Rate: £{round(base_rate)}", ln=True)
-            pdf.cell(200, 8, f"Margin: {margin}% (£{round(client_rate - base_rate)})", ln=True)
+            pdf.cell(200, 8, f"Margin: {margin['Margin Percentage']}% (£{margin['Daily Margin']}/day)", ln=True)
             pdf.cell(200, 8, f"Client Rate: £{round(client_rate)}", ln=True)
     
     # Inside IR35 Deductions
@@ -291,16 +305,24 @@ st.title("IR35 Tax Calculator")
 # Get UK bank holidays
 bank_holidays = get_uk_bank_holidays()
 
+# Set default dates
+today = datetime.today().date()
+default_end_date = today + timedelta(days=180)  # 6 months from today
+
+# IR35 Status Selection at the top
+status = st.radio(
+    "IR35 Status", 
+    ["Inside IR35", "Outside IR35"], 
+    horizontal=True,
+    help="Inside: Treated as employee. Outside: Self-employed"
+)
+
 # Calculation Mode Selection
 calculation_mode = st.radio(
     "Start Calculation From:",
     ["Client Rate", "Base Rate", "Pay Rate"],
     horizontal=True
 )
-
-# Set default dates
-today = datetime.today().date()
-default_end_date = today + timedelta(days=180)  # 6 months from today
 
 # Main Input Form
 with st.form("calculator_form"):
@@ -314,7 +336,8 @@ with st.form("calculator_form"):
                 min_value=0, 
                 value=800,
                 step=50,
-                help="The rate charged to the client"
+                help="The rate charged to the client",
+                key="client_rate"
             )
             margin_percent = st.number_input(
                 "Margin (%):", 
@@ -322,7 +345,8 @@ with st.form("calculator_form"):
                 max_value=100.0, 
                 value=23.0,
                 step=0.5,
-                help="Your company's margin percentage"
+                help="Your company's margin percentage",
+                key="margin_percent"
             )
             base_rate = calculate_base_rate(client_rate, margin_percent)
             st.write(f"**Calculated Base Rate:** £{round(base_rate)}")
@@ -333,7 +357,8 @@ with st.form("calculator_form"):
                 min_value=0, 
                 value=500,
                 step=50,
-                help="The rate after margin deduction"
+                help="The rate after margin deduction",
+                key="base_rate"
             )
             margin_percent = st.number_input(
                 "Margin (%):", 
@@ -341,7 +366,8 @@ with st.form("calculator_form"):
                 max_value=100.0, 
                 value=23.0,
                 step=0.5,
-                help="Your company's margin percentage"
+                help="Your company's margin percentage",
+                key="margin_percent"
             )
             client_rate = calculate_client_rate(base_rate, margin_percent)
             st.write(f"**Calculated Client Rate:** £{round(client_rate)}")
@@ -352,7 +378,8 @@ with st.form("calculator_form"):
                 min_value=0, 
                 value=400,
                 step=50,
-                help="The rate paid to consultant before employee deductions"
+                help="The rate paid to consultant before employee deductions",
+                key="pay_rate"
             )
             base_rate = calculate_base_rate_from_pay(pay_rate)
             st.write(f"**Calculated Base Rate:** £{round(base_rate)}")
@@ -362,7 +389,8 @@ with st.form("calculator_form"):
                 max_value=100.0, 
                 value=23.0,
                 step=0.5,
-                help="Your company's margin percentage"
+                help="Your company's margin percentage",
+                key="margin_percent"
             )
             client_rate = calculate_client_rate(base_rate, margin_percent)
             st.write(f"**Calculated Client Rate:** £{round(client_rate)}")
@@ -379,23 +407,22 @@ with st.form("calculator_form"):
             "Project Start Date:",
             value=today,
             min_value=today - timedelta(days=365),
-            max_value=today + timedelta(days=365*3)
+            max_value=today + timedelta(days=365*3),
+            key="start_date"
         )
         
         end_date = st.date_input(
             "Project End Date:",
             value=default_end_date,
             min_value=today,
-            max_value=today + timedelta(days=365*3)
+            max_value=today + timedelta(days=365*3),
+            key="end_date"
         )
         
     with col2:
         # Calculate working days
-        if start_date and end_date:
-            working_days = calculate_working_days(start_date, end_date, days_per_week, bank_holidays)
-            st.write(f"**Calculated Working Days:** {working_days}")
-        else:
-            working_days = 0
+        working_days = calculate_working_days(start_date, end_date, days_per_week, bank_holidays)
+        st.write(f"**Calculated Working Days:** {working_days}")
         
         # Only show Pay Rate input if not already the starting point
         if calculation_mode != "Pay Rate":
@@ -405,14 +432,9 @@ with st.form("calculator_form"):
                 value=round(calculate_pay_rate(base_rate)) if 'base_rate' in locals() else 400,
                 step=50,
                 help="The rate paid to consultant before employee deductions",
-                disabled=calculation_mode != "Pay Rate"
+                disabled=calculation_mode != "Pay Rate",
+                key="pay_rate_derived"
             )
-        
-        status = st.radio(
-            "IR35 Status", 
-            ["Inside IR35", "Outside IR35"], 
-            help="Inside: Treated as employee. Outside: Self-employed"
-        )
         
         if status == "Inside IR35":
             pension_contribution_percent = st.number_input(
@@ -421,6 +443,14 @@ with st.form("calculator_form"):
                 value=5.0,
                 step=0.5,
                 help="Percentage of salary going to your pension"
+            )
+            
+            employer_pension_percent = st.number_input(
+                "Employer Pension Contribution (%):", 
+                min_value=0.0, 
+                value=3.0,
+                step=0.5,
+                help="Standard UK employer contribution is 3%+"
             )
             
             student_loan_plan = st.selectbox(
@@ -436,6 +466,7 @@ with st.form("calculator_form"):
             )
             # Set defaults for fields not used in Outside IR35
             pension_contribution_percent = 0
+            employer_pension_percent = 0
             student_loan_plan = "None"
     
     # Submit button for the form
@@ -461,6 +492,9 @@ with st.form("calculator_form"):
                 st.session_state.employer_deductions = calculate_employer_deductions(base_rate, working_days)
             else:
                 st.session_state.employer_deductions = None
+            
+            if 'client_rate' in locals() and 'base_rate' in locals():
+                st.session_state.margin = calculate_margin(client_rate, base_rate, working_days)
 
 # Results Display
 if st.session_state.results:
@@ -500,15 +534,19 @@ if st.session_state.results:
         st.write("### Margin & Deductions")
         col1, col2 = st.columns(2)
         with col1:
-            st.write(f"**Margin:** {st.session_state.margin_percent}% (£{round(st.session_state.client_rate - st.session_state.base_rate)})")
-            st.write(f"**Daily Margin:** £{round((st.session_state.client_rate - st.session_state.base_rate)/st.session_state.working_days)}")
+            st.write(f"**Margin Percentage:** {st.session_state.margin['Margin Percentage']}%")
+            st.write(f"**Daily Margin:** £{st.session_state.margin['Daily Margin']}")
+            st.write(f"**Total Margin:** £{st.session_state.margin['Total Margin']}")
         with col2:
             if st.session_state.employer_deductions:
                 st.write("**Employer Deductions (Daily):**")
                 st.write(f"- NI (15%): £{st.session_state.employer_deductions['Daily Employer NI']}")
                 st.write(f"- Pension (3%): £{st.session_state.employer_deductions['Daily Employer Pension']}")
                 st.write(f"- Levy (0.5%): £{st.session_state.employer_deductions['Daily Apprentice Levy']}")
-                st.write(f"**Total Deductions:** £{st.session_state.employer_deductions['Total Employer Deductions']}")
+                st.write("**Total Deductions:**")
+                st.write(f"- NI: £{st.session_state.employer_deductions['Total Employer NI']}")
+                st.write(f"- Pension: £{st.session_state.employer_deductions['Total Employer Pension']}")
+                st.write(f"- Levy: £{st.session_state.employer_deductions['Total Apprentice Levy']}")
         
         # Time Period Breakdown
         st.write("### Project Breakdown")
@@ -562,7 +600,7 @@ if st.session_state.results:
             st.session_state.client_rate,
             st.session_state.base_rate,
             st.session_state.pay_rate,
-            st.session_state.margin_percent,
+            st.session_state.margin,
             st.session_state.employer_deductions,
             st.session_state.status
         )
