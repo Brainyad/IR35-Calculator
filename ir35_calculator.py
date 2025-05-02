@@ -6,10 +6,19 @@ from datetime import datetime, timedelta
 import math
 
 # Initialize session state
-if 'results' not in st.session_state:
-    st.session_state.results = None
-if 'compare_mode' not in st.session_state:
-    st.session_state.compare_mode = False
+def init_session_state():
+    if 'results' not in st.session_state:
+        st.session_state.results = None
+    if 'compare_mode' not in st.session_state:
+        st.session_state.compare_mode = False
+    if 'calculation_mode' not in st.session_state:
+        st.session_state.calculation_mode = "Client Rate"
+    if 'status' not in st.session_state:
+        st.session_state.status = "Inside IR35"
+    if 'working_days' not in st.session_state:
+        st.session_state.working_days = 0
+
+init_session_state()
 
 # UK Bank Holidays API
 def get_uk_bank_holidays():
@@ -314,14 +323,16 @@ status = st.radio(
     "IR35 Status", 
     ["Inside IR35", "Outside IR35"], 
     horizontal=True,
-    help="Inside: Treated as employee. Outside: Self-employed"
+    help="Inside: Treated as employee. Outside: Self-employed",
+    key="status"
 )
 
 # Calculation Mode Selection
 calculation_mode = st.radio(
     "Start Calculation From:",
     ["Client Rate", "Base Rate", "Pay Rate"],
-    horizontal=True
+    horizontal=True,
+    key="calculation_mode"
 )
 
 # Main Input Form
@@ -330,7 +341,7 @@ with st.form("calculator_form"):
     
     with col1:
         # Dynamic inputs based on calculation mode
-        if calculation_mode == "Client Rate":
+        if st.session_state.calculation_mode == "Client Rate":
             client_rate = st.number_input(
                 "Client Charge Rate (£):", 
                 min_value=0, 
@@ -351,7 +362,7 @@ with st.form("calculator_form"):
             base_rate = calculate_base_rate(client_rate, margin_percent)
             st.write(f"**Calculated Base Rate:** £{round(base_rate)}")
             
-        elif calculation_mode == "Base Rate":
+        elif st.session_state.calculation_mode == "Base Rate":
             base_rate = st.number_input(
                 "Base Rate (£):", 
                 min_value=0, 
@@ -400,7 +411,8 @@ with st.form("calculator_form"):
             "Days worked per week:",
             [1, 2, 3, 4, 5],
             index=4,
-            help="Number of days worked each week"
+            help="Number of days worked each week",
+            key="days_per_week"
         )
         
         start_date = st.date_input(
@@ -425,24 +437,25 @@ with st.form("calculator_form"):
         st.write(f"**Calculated Working Days:** {working_days}")
         
         # Only show Pay Rate input if not already the starting point
-        if calculation_mode != "Pay Rate":
+        if st.session_state.calculation_mode != "Pay Rate":
             pay_rate = st.number_input(
                 "Pay Rate (£):", 
                 min_value=0, 
                 value=round(calculate_pay_rate(base_rate)) if 'base_rate' in locals() else 400,
                 step=50,
                 help="The rate paid to consultant before employee deductions",
-                disabled=calculation_mode != "Pay Rate",
+                disabled=st.session_state.calculation_mode != "Pay Rate",
                 key="pay_rate_derived"
             )
         
-        if status == "Inside IR35":
+        if st.session_state.status == "Inside IR35":
             pension_contribution_percent = st.number_input(
                 "Employee Pension Contribution (%):", 
                 min_value=0.0, 
                 value=5.0,
                 step=0.5,
-                help="Percentage of salary going to your pension"
+                help="Percentage of salary going to your pension",
+                key="employee_pension"
             )
             
             employer_pension_percent = st.number_input(
@@ -450,19 +463,22 @@ with st.form("calculator_form"):
                 min_value=0.0, 
                 value=3.0,
                 step=0.5,
-                help="Standard UK employer contribution is 3%+"
+                help="Standard UK employer contribution is 3%+",
+                key="employer_pension"
             )
             
             student_loan_plan = st.selectbox(
                 "Student Loan Plan:", 
                 ["None", "Plan 1", "Plan 2", "Plan 4", "Plan 5", "Postgraduate Loan"],
-                help="Select your student loan repayment plan"
+                help="Select your student loan repayment plan",
+                key="student_loan"
             )
         else:  # Outside IR35
             vat_registered = st.checkbox(
                 "VAT Registered? (20%)", 
                 value=False,
-                help="Check if you're VAT registered (outside IR35 only)"
+                help="Check if you're VAT registered (outside IR35 only)",
+                key="vat_registered"
             )
             # Set defaults for fields not used in Outside IR35
             pension_contribution_percent = 0
@@ -476,28 +492,37 @@ with st.form("calculator_form"):
         if start_date >= end_date:
             st.error("End date must be after start date")
         else:
-            st.session_state.results = ir35_tax_calculator(
-                pay_rate, working_days, pension_contribution_percent,
-                student_loan_plan, status, 
-                vat_registered if status == "Outside IR35" else False
-            )
-            st.session_state.calculation_mode = calculation_mode
-            st.session_state.client_rate = client_rate if 'client_rate' in locals() else None
-            st.session_state.base_rate = base_rate if 'base_rate' in locals() else None
-            st.session_state.pay_rate = pay_rate
-            st.session_state.working_days = working_days
-            st.session_state.margin_percent = margin_percent if 'margin_percent' in locals() else None
-            st.session_state.status = status
-            if status == "Inside IR35":
-                st.session_state.employer_deductions = calculate_employer_deductions(base_rate, working_days)
+            # Store results in a dictionary first
+            results_data = {
+                "calculation_mode": st.session_state.calculation_mode,
+                "results": ir35_tax_calculator(
+                    pay_rate, working_days, pension_contribution_percent,
+                    student_loan_plan, st.session_state.status, 
+                    vat_registered if st.session_state.status == "Outside IR35" else False
+                ),
+                "client_rate": client_rate if 'client_rate' in locals() else None,
+                "base_rate": base_rate if 'base_rate' in locals() else None,
+                "pay_rate": pay_rate,
+                "working_days": working_days,
+                "margin_percent": margin_percent if 'margin_percent' in locals() else None,
+                "status": st.session_state.status
+            }
+
+            # Calculate additional data
+            if st.session_state.status == "Inside IR35":
+                results_data["employer_deductions"] = calculate_employer_deductions(base_rate, working_days)
             else:
-                st.session_state.employer_deductions = None
+                results_data["employer_deductions"] = None
             
             if 'client_rate' in locals() and 'base_rate' in locals():
-                st.session_state.margin = calculate_margin(client_rate, base_rate, working_days)
+                results_data["margin"] = calculate_margin(client_rate, base_rate, working_days)
+
+            # Update session state safely
+            for key, value in results_data.items():
+                st.session_state[key] = value
 
 # Results Display
-if st.session_state.results:
+if st.session_state.get('results'):
     st.subheader("Results")
     
     if st.session_state.status == "Outside IR35":
@@ -613,9 +638,9 @@ if st.session_state.results:
 
 # Comparison Mode
 st.subheader("Comparison Mode")
-compare = st.checkbox("Enable Comparison Mode")
+compare = st.checkbox("Enable Comparison Mode", key="compare_mode")
 
-if compare:
+if st.session_state.compare_mode:
     st.info("""
     **Comparison Explanation**: 
     - **Inside IR35**: Pay Rate is after employer deductions (NI 15%, Pension 3%, Levy 0.5%)
@@ -628,36 +653,41 @@ if compare:
         st.write("**Scenario 1 - Inside IR35**")
         inside_pay_rate = st.number_input(
             "Pay Rate (£)", 
-            key="inside_pay_rate", 
             value=400,
-            step=50
+            step=50,
+            key="inside_pay_rate"
         )
     
     with col2:
         st.write("**Scenario 2 - Outside IR35**")
         outside_base_rate = st.number_input(
             "Base Rate (£)", 
-            key="outside_base_rate", 
             value=500,
-            step=50
+            step=50,
+            key="outside_base_rate"
         )
         outside_vat = st.checkbox(
             "VAT Registered?", 
-            key="outside_vat", 
-            value=False
+            value=False,
+            key="outside_vat_checkbox"
         )
     
-    if st.button("Compare Scenarios"):
+    if st.button("Compare Scenarios", key="compare_button"):
         # Calculate working days for comparison
-        working_days = calculate_working_days(start_date, end_date, days_per_week, bank_holidays)
+        working_days = calculate_working_days(
+            st.session_state.start_date if 'start_date' in st.session_state else today,
+            st.session_state.end_date if 'end_date' in st.session_state else default_end_date,
+            st.session_state.days_per_week if 'days_per_week' in st.session_state else 5,
+            bank_holidays
+        )
         
         # Inside IR35 scenario
         inside_base_rate = calculate_base_rate_from_pay(inside_pay_rate)
         inside_employer_deductions = calculate_employer_deductions(inside_base_rate, working_days)
         inside_result = ir35_tax_calculator(
             inside_pay_rate, working_days, 
-            st.session_state.results.get('Employee Pension', 5) if st.session_state.results else 5,
-            st.session_state.results.get('Student Loan Plan', "None") if st.session_state.results else "None",
+            st.session_state.results.get('Employee Pension', 5) if st.session_state.get('results') else 5,
+            st.session_state.results.get('Student Loan Plan', "None") if st.session_state.get('results') else "None",
             "Inside IR35", False
         )
         
