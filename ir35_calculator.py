@@ -424,17 +424,7 @@ with st.form("calculator_form"):
         )
         
     with col2:
-        # Only show Pay Rate input when in Pay Rate mode
-        if st.session_state.calculation_mode == "Pay Rate":
-            st.session_state.pay_rate = st.number_input(
-                "Pay Rate (£):", 
-                min_value=0.0, 
-                value=float(st.session_state.pay_rate),
-                step=50.0,
-                format="%.2f",
-                key="pay_rate_derived"
-            )
-        
+        # Only show additional inputs when in Pay Rate mode
         if st.session_state.status == "Inside IR35":
             st.session_state.employee_pension = st.number_input(
                 "Employee Pension Contribution (%):", 
@@ -496,6 +486,12 @@ with st.form("calculator_form"):
                         float(st.session_state.margin_percent)
                     )
                     st.session_state.pay_rate = calculate_pay_rate(float(st.session_state.base_rate))
+                elif st.session_state.calculation_mode == "Pay Rate":
+                    st.session_state.base_rate = calculate_base_rate_from_pay(float(st.session_state.pay_rate))
+                    st.session_state.client_rate = calculate_client_rate(
+                        float(st.session_state.base_rate),
+                        float(st.session_state.margin_percent)
+                    )
                 
                 # Calculate results
                 st.session_state.results = ir35_tax_calculator(
