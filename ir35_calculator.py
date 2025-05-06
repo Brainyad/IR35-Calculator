@@ -755,4 +755,6 @@ if st.session_state.compare_mode:
         
         # Outside IR35 scenario
         outside_result = ir35_tax_calculator(
-            outside
+            outside_base_rate, working_days, 
+            0.0, "None", "Outside IR35", outside_vat
+        )  
