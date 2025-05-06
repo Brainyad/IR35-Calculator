@@ -551,11 +551,14 @@ if st.session_state.get('results'):
         
         # Margin and Employer Deductions
         st.write("### Margin & Deductions")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.write(f"**Margin Percentage:** {st.session_state.margin['Margin Percentage']}%")
-            st.write(f"**Daily Margin:** £{st.session_state.margin['Daily Margin']}")
-            st.write(f"**Total Margin:** £{st.session_state.margin['Total Margin']}")
+col1, col2 = st.columns(2)
+with col1:
+    if st.session_state.margin:
+        st.write(f"**Margin Percentage:** {st.session_state.margin['Daily %']}")
+        st.write(f"**Daily Margin:** £{st.session_state.margin['Daily Margin']:,}")
+        st.write(f"**Total Margin:** £{st.session_state.margin['Total Margin']:,}")
+    else:
+        st.warning("Margin data is not available.")
         with col2:
             if st.session_state.employer_deductions:
                 st.write("**Employer Deductions (Daily):**")
