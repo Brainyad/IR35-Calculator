@@ -550,15 +550,19 @@ if st.session_state.get('results'):
             st.metric("Pay Rate", f"£{round(st.session_state.pay_rate)}")
         
         # Margin and Employer Deductions
-        st.write("### Margin & Deductions")
+        
+st.write("### Margin & Deductions")
 col1, col2 = st.columns(2)
+
 with col1:
-    if st.session_state.margin:
-        st.write(f"**Margin Percentage:** {st.session_state.margin['Daily %']}")
-        st.write(f"**Daily Margin:** £{st.session_state.margin['Daily Margin']:,}")
-        st.write(f"**Total Margin:** £{st.session_state.margin['Total Margin']:,}")
+    margin = st.session_state.get("margin", {})
+    if isinstance(margin, dict) and all(k in margin for k in ["Daily %", "Daily Margin", "Total Margin"]):
+        st.write(f"**Margin Percentage:** {margin['Daily %']}")
+        st.write(f"**Daily Margin:** £{margin['Daily Margin']:,}")
+        st.write(f"**Total Margin:** £{margin['Total Margin']:,}")
     else:
-        st.warning("Margin data is not available.")
+        st.warning("Margin data is not available or incomplete.")
+
         with col2:
             if st.session_state.employer_deductions:
                 st.write("**Employer Deductions (Daily):**")
