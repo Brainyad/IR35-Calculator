@@ -424,8 +424,8 @@ with st.form("calculator_form"):
         )
         
     with col2:
-        # Pay Rate input when not in Pay Rate mode
-        if st.session_state.calculation_mode != "Pay Rate":
+        # Only show Pay Rate input when in Pay Rate mode
+        if st.session_state.calculation_mode == "Pay Rate":
             st.session_state.pay_rate = st.number_input(
                 "Pay Rate (£):", 
                 min_value=0.0, 
@@ -483,6 +483,20 @@ with st.form("calculator_form"):
                     bank_holidays
                 )
                 
+                # Calculate rates based on calculation mode
+                if st.session_state.calculation_mode == "Client Rate":
+                    st.session_state.base_rate = calculate_base_rate(
+                        float(st.session_state.client_rate),
+                        float(st.session_state.margin_percent)
+                    )
+                    st.session_state.pay_rate = calculate_pay_rate(float(st.session_state.base_rate))
+                elif st.session_state.calculation_mode == "Base Rate":
+                    st.session_state.client_rate = calculate_client_rate(
+                        float(st.session_state.base_rate),
+                        float(st.session_state.margin_percent)
+                    )
+                    st.session_state.pay_rate = calculate_pay_rate(float(st.session_state.base_rate))
+                
                 # Calculate results
                 st.session_state.results = ir35_tax_calculator(
                     float(st.session_state.pay_rate),
@@ -494,17 +508,6 @@ with st.form("calculator_form"):
                 )
                 
                 if st.session_state.status == "Inside IR35":
-                    # Calculate base rate if not already set
-                    if st.session_state.calculation_mode != "Base Rate":
-                        st.session_state.base_rate = calculate_base_rate_from_pay(float(st.session_state.pay_rate))
-                    
-                    # Calculate client rate if not already set
-                    if st.session_state.calculation_mode != "Client Rate":
-                        st.session_state.client_rate = calculate_client_rate(
-                            float(st.session_state.base_rate),
-                            float(st.session_state.margin_percent)
-                        )
-                    
                     st.session_state.employer_deductions = calculate_employer_deductions(
                         float(st.session_state.base_rate),
                         st.session_state.working_days
@@ -551,14 +554,14 @@ if st.session_state.get('results'):
         
         # Margin and Employer Deductions
         st.write("### Margin & Deductions")
-col1, col2 = st.columns(2)
-with col1:
-    if st.session_state.margin:
-        st.write(f"**Margin Percentage:** {st.session_state.margin['Daily %']}")
-        st.write(f"**Daily Margin:** £{st.session_state.margin['Daily Margin']:,}")
-        st.write(f"**Total Margin:** £{st.session_state.margin['Total Margin']:,}")
-    else:
-        st.warning("Margin data is not available.")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.session_state.margin:
+                st.write(f"**Margin Percentage:** {st.session_state.margin['Margin Percentage']}%")
+                st.write(f"**Daily Margin:** £{st.session_state.margin['Daily Margin']:,}")
+                st.write(f"**Total Margin:** £{st.session_state.margin['Total Margin']:,}")
+            else:
+                st.warning("Margin data is not available.")
         with col2:
             if st.session_state.employer_deductions:
                 st.write("**Employer Deductions (Daily):**")
