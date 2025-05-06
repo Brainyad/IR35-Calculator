@@ -20,9 +20,9 @@ def initialize_session_state():
         'start_date': datetime.today().date(),
         'end_date': (datetime.today() + timedelta(days=180)).date(),
         'vat_registered': False,
-        'client_rate': 800,
-        'base_rate': 500,
-        'pay_rate': 400,
+        'client_rate': 800.0,
+        'base_rate': 500.0,
+        'pay_rate': 400.0,
         'margin_percent': 23.0,
         'employer_deductions': None,
         'margin': None
@@ -352,17 +352,19 @@ with st.form("calculator_form"):
         if calculation_mode == "Client Rate":
             client_rate = st.number_input(
                 "Client Charge Rate (£):", 
-                min_value=0, 
-                value=st.session_state.client_rate,
-                step=50,
+                min_value=0.0, 
+                value=float(st.session_state.client_rate),
+                step=50.0,
+                format="%.2f",
                 key="client_rate_input"
             )
             margin_percent = st.number_input(
                 "Margin (%):", 
                 min_value=0.0, 
                 max_value=100.0, 
-                value=st.session_state.margin_percent,
+                value=float(st.session_state.margin_percent),
                 step=0.5,
+                format="%.1f",
                 key="margin_percent_input"
             )
             base_rate = calculate_base_rate(client_rate, margin_percent)
@@ -371,17 +373,19 @@ with st.form("calculator_form"):
         elif calculation_mode == "Base Rate":
             base_rate = st.number_input(
                 "Base Rate (£):", 
-                min_value=0, 
-                value=st.session_state.base_rate,
-                step=50,
+                min_value=0.0, 
+                value=float(st.session_state.base_rate),
+                step=50.0,
+                format="%.2f",
                 key="base_rate_input"
             )
             margin_percent = st.number_input(
                 "Margin (%):", 
                 min_value=0.0, 
                 max_value=100.0, 
-                value=st.session_state.margin_percent,
+                value=float(st.session_state.margin_percent),
                 step=0.5,
+                format="%.1f",
                 key="margin_percent_input"
             )
             client_rate = calculate_client_rate(base_rate, margin_percent)
@@ -390,9 +394,10 @@ with st.form("calculator_form"):
         else:  # Pay Rate
             pay_rate = st.number_input(
                 "Pay Rate (£):", 
-                min_value=0, 
-                value=st.session_state.pay_rate,
-                step=50,
+                min_value=0.0, 
+                value=float(st.session_state.pay_rate),
+                step=50.0,
+                format="%.2f",
                 key="pay_rate_input"
             )
             base_rate = calculate_base_rate_from_pay(pay_rate)
@@ -401,8 +406,9 @@ with st.form("calculator_form"):
                 "Margin (%):", 
                 min_value=0.0, 
                 max_value=100.0, 
-                value=st.session_state.margin_percent,
+                value=float(st.session_state.margin_percent),
                 step=0.5,
+                format="%.1f",
                 key="margin_percent_input"
             )
             client_rate = calculate_client_rate(base_rate, margin_percent)
@@ -437,9 +443,10 @@ with st.form("calculator_form"):
         if calculation_mode != "Pay Rate":
             pay_rate = st.number_input(
                 "Pay Rate (£):", 
-                min_value=0, 
-                value=round(calculate_pay_rate(base_rate)) if 'base_rate' in locals() else st.session_state.pay_rate,
-                step=50,
+                min_value=0.0, 
+                value=float(round(calculate_pay_rate(base_rate))) if 'base_rate' in locals() else float(st.session_state.pay_rate),
+                step=50.0,
+                format="%.2f",
                 key="pay_rate_derived"
             )
         
@@ -447,16 +454,18 @@ with st.form("calculator_form"):
             employee_pension = st.number_input(
                 "Employee Pension Contribution (%):", 
                 min_value=0.0, 
-                value=st.session_state.employee_pension,
+                value=float(st.session_state.employee_pension),
                 step=0.5,
+                format="%.1f",
                 key="employee_pension_input"
             )
             
             employer_pension_percent = st.number_input(
                 "Employer Pension Contribution (%):", 
                 min_value=0.0, 
-                value=st.session_state.employer_pension_percent,
+                value=float(st.session_state.employer_pension_percent),
                 step=0.5,
+                format="%.1f",
                 key="employer_pension_input"
             )
             
@@ -473,6 +482,7 @@ with st.form("calculator_form"):
                 key="vat_registered_checkbox"
             )
     
+    # Use st.form_submit_button() instead of st.form_submit_button
     submitted = st.form_submit_button("Calculate")
     
     if submitted:
@@ -488,21 +498,21 @@ with st.form("calculator_form"):
                     'start_date': start_date,
                     'end_date': end_date,
                     'working_days': working_days,
-                    'employee_pension': employee_pension if status == "Inside IR35" else 0,
-                    'employer_pension_percent': employer_pension_percent if status == "Inside IR35" else 0,
+                    'employee_pension': float(employee_pension) if status == "Inside IR35" else 0.0,
+                    'employer_pension_percent': float(employer_pension_percent) if status == "Inside IR35" else 0.0,
                     'student_loan': student_loan if status == "Inside IR35" else "None",
                     'vat_registered': vat_registered if status == "Outside IR35" else False,
-                    'client_rate': client_rate if 'client_rate' in locals() else st.session_state.client_rate,
-                    'base_rate': base_rate if 'base_rate' in locals() else st.session_state.base_rate,
-                    'pay_rate': pay_rate,
-                    'margin_percent': margin_percent if 'margin_percent' in locals() else st.session_state.margin_percent
+                    'client_rate': float(client_rate) if 'client_rate' in locals() else float(st.session_state.client_rate),
+                    'base_rate': float(base_rate) if 'base_rate' in locals() else float(st.session_state.base_rate),
+                    'pay_rate': float(pay_rate),
+                    'margin_percent': float(margin_percent) if 'margin_percent' in locals() else float(st.session_state.margin_percent)
                 }
                 
                 # Calculate results
                 results = ir35_tax_calculator(
-                    pay_rate,
+                    float(pay_rate),
                     working_days,
-                    employee_pension if status == "Inside IR35" else 0,
+                    float(employee_pension) if status == "Inside IR35" else 0.0,
                     student_loan if status == "Inside IR35" else "None",
                     status,
                     vat_registered if status == "Outside IR35" else False
@@ -511,10 +521,10 @@ with st.form("calculator_form"):
                 new_state['results'] = results
                 
                 if status == "Inside IR35":
-                    new_state['employer_deductions'] = calculate_employer_deductions(base_rate, working_days)
+                    new_state['employer_deductions'] = calculate_employer_deductions(float(base_rate), working_days)
                     new_state['margin'] = calculate_margin(
-                        client_rate if calculation_mode == "Client Rate" else calculate_client_rate(base_rate, margin_percent),
-                        base_rate,
+                        float(client_rate) if calculation_mode == "Client Rate" else float(calculate_client_rate(base_rate, margin_percent)),
+                        float(base_rate),
                         working_days
                     )
                 else:
@@ -528,5 +538,203 @@ with st.form("calculator_form"):
             except Exception as e:
                 st.error(f"An error occurred during calculation: {str(e)}")
 
-# [Rest of your code for results display, comparison mode, etc.]
-# Make sure all references to variables use st.session_state
+# Results Display
+if st.session_state.get('results'):
+    st.subheader("Results")
+    
+    if st.session_state.status == "Outside IR35":
+        # Outside IR35 Results
+        st.write("### Outside IR35 - Self-Employed Consultant")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write(f"**Base Rate = Pay Rate:** £{round(st.session_state.pay_rate)}")
+            st.write(f"**Working Days:** {st.session_state.results['Working Days']}")
+            st.write(f"**Project Total:** £{round(st.session_state.results['Project Total'])}")
+        with col2:
+            if st.session_state.results['VAT Amount'] > 0:
+                st.write(f"**VAT Charged to Client (20%):** £{round(st.session_state.results['VAT Amount'])}")
+        
+        st.warning(st.session_state.results['Disclaimer'])
+    else:
+        # Inside IR35 Results
+        st.write("### Rate Summary")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if st.session_state.calculation_mode == "Client Rate":
+                st.metric("Client Rate", f"£{round(st.session_state.client_rate)}")
+            else:
+                st.metric("Calculated Client Rate", f"£{round(st.session_state.client_rate)}")
+        with col2:
+            if st.session_state.calculation_mode == "Base Rate":
+                st.metric("Base Rate", f"£{round(st.session_state.base_rate)}")
+            else:
+                st.metric("Calculated Base Rate", f"£{round(st.session_state.base_rate)}")
+        with col3:
+            st.metric("Pay Rate", f"£{round(st.session_state.pay_rate)}")
+        
+        # Margin and Employer Deductions
+        st.write("### Margin & Deductions")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write(f"**Margin Percentage:** {st.session_state.margin['Margin Percentage']}%")
+            st.write(f"**Daily Margin:** £{st.session_state.margin['Daily Margin']}")
+            st.write(f"**Total Margin:** £{st.session_state.margin['Total Margin']}")
+        with col2:
+            if st.session_state.employer_deductions:
+                st.write("**Employer Deductions (Daily):**")
+                st.write(f"- NI (15%): £{st.session_state.employer_deductions['Daily Employer NI']}")
+                st.write(f"- Pension (3%): £{st.session_state.employer_deductions['Daily Employer Pension']}")
+                st.write(f"- Levy (0.5%): £{st.session_state.employer_deductions['Daily Apprentice Levy']}")
+                st.write("**Total Deductions:**")
+                st.write(f"- NI: £{st.session_state.employer_deductions['Total Employer NI']}")
+                st.write(f"- Pension: £{st.session_state.employer_deductions['Total Employer Pension']}")
+                st.write(f"- Levy: £{st.session_state.employer_deductions['Total Apprentice Levy']}")
+        
+        # Time Period Breakdown
+        st.write("### Project Breakdown")
+        days_in_month = 20  # Standard assumption
+        
+        # Daily rates
+        daily_gross = st.session_state.pay_rate
+        daily_net = st.session_state.results["Net Take-Home Pay"] / st.session_state.working_days
+        
+        # Monthly rates (20 working days)
+        monthly_gross = daily_gross * days_in_month
+        monthly_net = daily_net * days_in_month
+        
+        # Project totals
+        project_gross = daily_gross * st.session_state.working_days
+        project_net = st.session_state.results["Net Take-Home Pay"]
+        
+        # Display in columns
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.write("**Daily Rates**")
+            st.write(f"Gross: £{round(daily_gross)}")
+            st.write(f"Net: £{round(daily_net)}")
+        with col2:
+            st.write("**Monthly Rates (20 days)**")
+            st.write(f"Gross: £{round(monthly_gross)}")
+            st.write(f"Net: £{round(monthly_net)}")
+        with col3:
+            st.write(f"**Project Total ({st.session_state.working_days} days)**")
+            st.write(f"Gross: £{round(project_gross)}")
+            st.write(f"Net: £{round(project_net)}")
+        
+        # Payslip Breakdown
+        basic_rate, holiday_pay = calculate_holiday_components(st.session_state.pay_rate)
+        st.write("### Payslip Breakdown (Compliance)")
+        st.write(f"**Basic Daily Rate (excl. holiday pay):** £{basic_rate}")
+        st.write(f"**Holiday Pay (per day):** £{holiday_pay}")
+        st.caption("Note: These values are for compliance purposes only and not used in negotiations.")
+        
+        # Detailed Breakdown
+        st.write("### Detailed Breakdown")
+        for key, value in st.session_state.results.items():
+            if key not in ["VAT Amount", "Working Days", "Disclaimer"]:
+                st.write(f"**{key}:** £{value}")
+    
+    # Generate Report Button
+    if st.button("Generate PDF Report"):
+        pdf_data = generate_pdf(
+            st.session_state.results,
+            st.session_state.calculation_mode,
+            st.session_state.client_rate,
+            st.session_state.base_rate,
+            st.session_state.pay_rate,
+            st.session_state.margin,
+            st.session_state.employer_deductions,
+            st.session_state.status
+        )
+        st.download_button(
+            "Download Report",
+            data=pdf_data,
+            file_name="IR35_Tax_Report.pdf",
+            mime="application/pdf"
+        )
+
+# Comparison Mode
+st.subheader("Comparison Mode")
+st.session_state.compare_mode = st.checkbox("Enable Comparison Mode", key="compare_mode_checkbox")
+
+if st.session_state.compare_mode:
+    st.info("""
+    **Comparison Explanation**: 
+    - **Inside IR35**: Pay Rate is after employer deductions (NI 15%, Pension 3%, Levy 0.5%)
+    - **Outside IR35**: Pay Rate equals Base Rate (no deductions)
+    """)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.write("**Scenario 1 - Inside IR35**")
+        inside_pay_rate = st.number_input(
+            "Pay Rate (£)", 
+            value=400.0,
+            step=50.0,
+            format="%.2f",
+            key="inside_pay_rate"
+        )
+    
+    with col2:
+        st.write("**Scenario 2 - Outside IR35**")
+        outside_base_rate = st.number_input(
+            "Base Rate (£)", 
+            value=500.0,
+            step=50.0,
+            format="%.2f",
+            key="outside_base_rate"
+        )
+        outside_vat = st.checkbox(
+            "VAT Registered?", 
+            value=False,
+            key="outside_vat_checkbox"
+        )
+    
+    if st.button("Compare Scenarios", key="compare_button"):
+        # Calculate working days for comparison
+        working_days = calculate_working_days(
+            st.session_state.start_date,
+            st.session_state.end_date,
+            st.session_state.days_per_week,
+            bank_holidays
+        )
+        
+        # Inside IR35 scenario
+        inside_base_rate = calculate_base_rate_from_pay(inside_pay_rate)
+        inside_employer_deductions = calculate_employer_deductions(inside_base_rate, working_days)
+        inside_result = ir35_tax_calculator(
+            inside_pay_rate, working_days, 
+            st.session_state.employee_pension,
+            st.session_state.student_loan,
+            "Inside IR35", False
+        )
+        
+        # Outside IR35 scenario
+        outside_result = ir35_tax_calculator(
+            outside_base_rate, working_days, 
+            0.0, "None", "Outside IR35", outside_vat
+        )
+        
+        # Display comparison
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write("### Inside IR35")
+            st.write(f"**Pay Rate:** £{round(inside_pay_rate)}")
+            st.write(f"**Base Rate:** £{round(inside_base_rate)}")
+            st.write("**Employer Deductions (Daily):**")
+            st.write(f"- NI (15%): £{inside_employer_deductions['Daily Employer NI']}")
+            st.write(f"- Pension (3%): £{inside_employer_deductions['Daily Employer Pension']}")
+            st.write(f"- Levy (0.5%): £{inside_employer_deductions['Daily Apprentice Levy']}")
+            st.write(f"**Daily Net:** £{round(inside_result['Net Take-Home Pay']/working_days)}")
+            st.write(f"**Project Net:** £{round(inside_result['Net Take-Home Pay'])}")
+        
+        with col2:
+            st.write("### Outside IR35")
+            st.write(f"**Base Rate = Pay Rate:** £{round(outside_base_rate)}")
+            if outside_vat:
+                st.write(f"**VAT Charged to Client (20%):** £{round(outside_result['VAT Amount'])}")
+            st.write(f"**Project Total:** £{round(outside_result['Project Total'])}")
+            st.warning("Self-employed consultants must calculate their own taxes")
+        
+        #
