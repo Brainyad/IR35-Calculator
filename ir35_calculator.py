@@ -763,4 +763,3 @@ if st.session_state.compare_mode:
             )
             outside_result = ir35_tax_calculator(
                 outside_base_rate,
-        )
