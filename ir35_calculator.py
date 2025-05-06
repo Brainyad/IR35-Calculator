@@ -599,21 +599,24 @@ if st.session_state.get('results'):
     df_margin = pd.DataFrame(margin_data, columns=["Metric", "Value"])
     st.dataframe(styled_dataframe(df_margin), use_container_width=True)
     
-    if st.session_state.status == "Outside IR35":
-        # Outside IR35 Results
-        st.write("### Project Summary")
-        summary_data = [
-            ["Working Days", st.session_state.results['Working Days']],
-            ["Project Total", f"£{round(st.session_state.results['Project Total'])}"]
-        ]
-        
-        if st.session_state.results['VAT Amount'] > 0:
-            summary_data.append(["VAT Charged to Client (20%)", f"£{round(st.session_state.results['VAT Amount'])}"])
-        
-        df_summary = pd.DataFrame(summary_data, columns=["Metric", "Value"])
-        st.dataframe(styled_dataframe(df_summary), use_container_width=True)
-        
-        st.warning(st.session_state.results['Disclaimer'])
+if st.session_state.status == "Outside IR35":
+    # Outside IR35 Results
+    st.write("### Outside IR35 - Self-Employed Consultant")
+    
+    # Create summary table
+    summary_data = [
+        ["Base Rate = Pay Rate", f"£{round(st.session_state.pay_rate)}"],
+        ["Working Days", st.session_state.working_days],
+        ["Project Total", f"£{round(st.session_state.results.get('Project Total', 0))}"]
+    ]
+    
+    if st.session_state.vat_registered:
+        summary_data.append(["VAT Charged to Client (20%)", f"£{round(st.session_state.results.get('VAT Amount', 0))}"])
+    
+    df_summary = pd.DataFrame(summary_data, columns=["Metric", "Value"])
+    st.dataframe(styled_dataframe(df_summary), use_container_width=True)
+    
+    st.warning(st.session_state.results.get('Disclaimer', ""))
     else:
         # Inside IR35 Results
         if st.session_state.employer_deductions:
