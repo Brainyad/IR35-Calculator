@@ -32,7 +32,9 @@ def initialize_session_state():
         'pay_rate': 400.0,
         'margin_percent': 23.0,
         'employer_deductions': None,
-        'margin': None
+        'margin': None,
+        'inside_scenario': None,
+        'outside_scenario': None
     }
     
     for key, value in default_state.items():
@@ -334,12 +336,12 @@ st.markdown(f"""
             background-color: {WHITE};
         }}
         .stButton>button {{
-            background-color: {ORANGE};
+            background-color: {GREY};
             color: white;
             border: none;
         }}
         .stButton>button:hover {{
-            background-color: {GREY};
+            background-color: {ORANGE};
             color: white;
         }}
         .stRadio>div>div {{
@@ -363,6 +365,12 @@ st.markdown(f"""
         h1, h2, h3 {{
             color: {GREY};
         }}
+        .dataframe {{
+            width: auto !important;
+        }}
+        .stDataFrame {{
+            width: auto !important;
+        }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -378,24 +386,23 @@ st.title("IR35 Tax Calculator")
 # Get UK bank holidays
 bank_holidays = get_uk_bank_holidays()
 
-# Configuration options at the top
-col1, col2 = st.columns(2)
-with col1:
-    st.session_state.status = st.radio(
-        "IR35 Status", 
-        ["Inside IR35", "Outside IR35"], 
-        index=0 if st.session_state.status == "Inside IR35" else 1,
-        horizontal=True,
-        key="status_config"
-    )
-with col2:
-    st.session_state.calculation_mode = st.radio(
-        "Start Calculation From:",
-        ["Client Rate", "Base Rate", "Pay Rate"],
-        index=["Client Rate", "Base Rate", "Pay Rate"].index(st.session_state.calculation_mode),
-        horizontal=True,
-        key="calculation_mode_config"
-    )
+# Configuration options
+with st.container():
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        st.session_state.calculation_mode = st.radio(
+            "Start Calculation From:",
+            ["Client Rate", "Base Rate", "Pay Rate"],
+            index=["Client Rate", "Base Rate", "Pay Rate"].index(st.session_state.calculation_mode),
+            key="calculation_mode_config"
+        )
+    with col2:
+        st.session_state.status = st.radio(
+            "IR35 Status", 
+            ["Inside IR35", "Outside IR35"], 
+            index=0 if st.session_state.status == "Inside IR35" else 1,
+            key="status_config"
+        )
 
 # Main Input Form
 with st.form("calculator_form"):
@@ -468,6 +475,7 @@ with st.form("calculator_form"):
             key="days_per_week_select"
         )
         
+    with col2:
         st.session_state.start_date = st.date_input(
             "Project Start Date:",
             value=st.session_state.start_date,
@@ -480,8 +488,6 @@ with st.form("calculator_form"):
             key="end_date_input"
         )
         
-    with col2:
-        # Additional configuration options
         if st.session_state.status == "Inside IR35":
             st.session_state.employee_pension = st.number_input(
                 "Employee Pension Contribution (%):", 
@@ -490,15 +496,6 @@ with st.form("calculator_form"):
                 step=0.5,
                 format="%.1f",
                 key="employee_pension_input"
-            )
-            
-            st.session_state.employer_pension_percent = st.number_input(
-                "Employer Pension Contribution (%):", 
-                min_value=0.0, 
-                value=float(st.session_state.employer_pension_percent),
-                step=0.5,
-                format="%.1f",
-                key="employer_pension_input"
             )
             
             st.session_state.student_loan = st.selectbox(
@@ -560,19 +557,20 @@ with st.form("calculator_form"):
                     st.session_state.vat_registered if st.session_state.status == "Outside IR35" else False
                 )
                 
+                # Calculate margin and deductions for both Inside and Outside IR35
+                st.session_state.margin = calculate_margin(
+                    float(st.session_state.client_rate),
+                    float(st.session_state.base_rate),
+                    st.session_state.working_days
+                )
+                
                 if st.session_state.status == "Inside IR35":
                     st.session_state.employer_deductions = calculate_employer_deductions(
                         float(st.session_state.base_rate),
                         st.session_state.working_days
                     )
-                    st.session_state.margin = calculate_margin(
-                        float(st.session_state.client_rate),
-                        float(st.session_state.base_rate),
-                        st.session_state.working_days
-                    )
                 else:
                     st.session_state.employer_deductions = None
-                    st.session_state.margin = None
                     
             except Exception as e:
                 st.error(f"An error occurred during calculation: {str(e)}")
@@ -581,13 +579,30 @@ with st.form("calculator_form"):
 if st.session_state.get('results'):
     st.subheader("Results")
     
+    # Rate Summary (shown for both Inside and Outside IR35)
+    st.write("### Rate Summary")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Client Rate", f"£{round(st.session_state.client_rate)}")
+    with col2:
+        st.metric("Base Rate", f"£{round(st.session_state.base_rate)}")
+    with col3:
+        st.metric("Pay Rate", f"£{round(st.session_state.pay_rate)}")
+    
+    # Margin information (shown for both Inside and Outside IR35)
+    st.write("### Margin Information")
+    margin_data = [
+        ["Margin Percentage", f"{st.session_state.margin['Margin Percentage']}%"],
+        ["Daily Margin", f"£{st.session_state.margin['Daily Margin']}"],
+        ["Total Margin", f"£{st.session_state.margin['Total Margin']}"]
+    ]
+    df_margin = pd.DataFrame(margin_data, columns=["Metric", "Value"])
+    st.dataframe(styled_dataframe(df_margin), use_container_width=True)
+    
     if st.session_state.status == "Outside IR35":
         # Outside IR35 Results
-        st.write("### Outside IR35 - Self-Employed Consultant")
-        
-        # Create summary table
+        st.write("### Project Summary")
         summary_data = [
-            ["Base Rate = Pay Rate", f"£{round(st.session_state.pay_rate)}"],
             ["Working Days", st.session_state.results['Working Days']],
             ["Project Total", f"£{round(st.session_state.results['Project Total'])}"]
         ]
@@ -601,46 +616,19 @@ if st.session_state.get('results'):
         st.warning(st.session_state.results['Disclaimer'])
     else:
         # Inside IR35 Results
-        st.write("### Rate Summary")
-        
-        # Create rate summary table
-        rate_data = [
-            ["Client Rate", f"£{round(st.session_state.client_rate)}"],
-            ["Base Rate", f"£{round(st.session_state.base_rate)}"],
-            ["Pay Rate", f"£{round(st.session_state.pay_rate)}"]
-        ]
-        df_rates = pd.DataFrame(rate_data, columns=["Rate Type", "Daily Amount"])
-        st.dataframe(styled_dataframe(df_rates), use_container_width=True)
-        
-        # Margin and Employer Deductions
-        st.write("### Margin & Deductions")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if st.session_state.margin:
-                margin_data = [
-                    ["Margin Percentage", f"{st.session_state.margin['Margin Percentage']}%"],
-                    ["Daily Margin", f"£{st.session_state.margin['Daily Margin']}"],
-                    ["Total Margin", f"£{st.session_state.margin['Total Margin']}"]
-                ]
-                df_margin = pd.DataFrame(margin_data, columns=["Metric", "Value"])
-                st.dataframe(styled_dataframe(df_margin), use_container_width=True)
-            else:
-                st.warning("Margin data is not available.")
-        
-        with col2:
-            if st.session_state.employer_deductions:
-                deductions_data = [
-                    ["Daily Employer NI (15%)", f"£{st.session_state.employer_deductions['Daily Employer NI']}"],
-                    ["Daily Employer Pension (3%)", f"£{st.session_state.employer_deductions['Daily Employer Pension']}"],
-                    ["Daily Apprentice Levy (0.5%)", f"£{st.session_state.employer_deductions['Daily Apprentice Levy']}"],
-                    ["Total Employer NI", f"£{st.session_state.employer_deductions['Total Employer NI']}"],
-                    ["Total Employer Pension", f"£{st.session_state.employer_deductions['Total Employer Pension']}"],
-                    ["Total Apprentice Levy", f"£{st.session_state.employer_deductions['Total Apprentice Levy']}"],
-                    ["Total Employer Deductions", f"£{st.session_state.employer_deductions['Total Employer Deductions']}"]
-                ]
-                df_deductions = pd.DataFrame(deductions_data, columns=["Deduction", "Amount"])
-                st.dataframe(styled_dataframe(df_deductions), use_container_width=True)
+        if st.session_state.employer_deductions:
+            st.write("### Employer Deductions")
+            deductions_data = [
+                ["Daily Employer NI (15%)", f"£{st.session_state.employer_deductions['Daily Employer NI']}"],
+                ["Daily Employer Pension (3%)", f"£{st.session_state.employer_deductions['Daily Employer Pension']}"],
+                ["Daily Apprentice Levy (0.5%)", f"£{st.session_state.employer_deductions['Daily Apprentice Levy']}"],
+                ["Total Employer NI", f"£{st.session_state.employer_deductions['Total Employer NI']}"],
+                ["Total Employer Pension", f"£{st.session_state.employer_deductions['Total Employer Pension']}"],
+                ["Total Apprentice Levy", f"£{st.session_state.employer_deductions['Total Apprentice Levy']}"],
+                ["Total Employer Deductions", f"£{st.session_state.employer_deductions['Total Employer Deductions']}"]
+            ]
+            df_deductions = pd.DataFrame(deductions_data, columns=["Deduction", "Amount"])
+            st.dataframe(styled_dataframe(df_deductions), use_container_width=True)
         
         # Time Period Breakdown
         st.write("### Project Breakdown")
@@ -735,26 +723,43 @@ if st.session_state.compare_mode:
         )
     
     if st.button("Compare Scenarios", key="compare_button", use_container_width=True):
-        # Calculate working days for comparison
-        working_days = calculate_working_days(
-            st.session_state.start_date,
-            st.session_state.end_date,
-            st.session_state.days_per_week,
-            bank_holidays
-        )
-        
-        # Inside IR35 scenario
-        inside_base_rate = calculate_base_rate_from_pay(inside_pay_rate)
-        inside_employer_deductions = calculate_employer_deductions(inside_base_rate, working_days)
-        inside_result = ir35_tax_calculator(
-            inside_pay_rate, working_days, 
-            st.session_state.employee_pension,
-            st.session_state.student_loan,
-            "Inside IR35", False
-        )
-        
-        # Outside IR35 scenario
-        outside_result = ir35_tax_calculator(
-            outside_base_rate, working_days, 
-            0.0, "None", "Outside IR35", outside_vat
-        )  
+        try:
+            # Calculate working days for comparison
+            working_days = calculate_working_days(
+                st.session_state.start_date,
+                st.session_state.end_date,
+                st.session_state.days_per_week,
+                bank_holidays
+            )
+            
+            # Inside IR35 scenario
+            inside_base_rate = calculate_base_rate_from_pay(inside_pay_rate)
+            inside_client_rate = calculate_client_rate(
+                inside_base_rate,
+                st.session_state.margin_percent
+            )
+            inside_employer_deductions = calculate_employer_deductions(inside_base_rate, working_days)
+            inside_margin = calculate_margin(
+                inside_client_rate,
+                inside_base_rate,
+                working_days
+            )
+            inside_result = ir35_tax_calculator(
+                inside_pay_rate, working_days, 
+                st.session_state.employee_pension,
+                st.session_state.student_loan,
+                "Inside IR35", False
+            )
+            
+            # Outside IR35 scenario
+            outside_client_rate = calculate_client_rate(
+                outside_base_rate,
+                st.session_state.margin_percent
+            )
+            outside_margin = calculate_margin(
+                outside_client_rate,
+                outside_base_rate,
+                working_days
+            )
+            outside_result = ir35_tax_calculator(
+                outside_base_rate,
