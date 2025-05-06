@@ -4,6 +4,13 @@ from fpdf import FPDF
 import requests
 from datetime import datetime, timedelta
 import math
+import pandas as pd
+
+# Company Colors
+GREY = "#515D7A"
+ORANGE = "#F39200"
+LIGHT_GREY = "#F5F5F5"
+WHITE = "#FFFFFF"
 
 # Initialize all session state variables with proper defaults
 def initialize_session_state():
@@ -199,6 +206,17 @@ def ir35_tax_calculator(pay_rate, working_days, pension_contribution_percent=5,
             "Daily Rate": pay_rate
         }
 
+def styled_dataframe(df, title=""):
+    """Apply company styling to a dataframe"""
+    return df.style.set_table_styles([
+        {'selector': 'thead', 'props': [('background-color', GREY), ('color', WHITE)]},
+        {'selector': 'tbody tr:nth-child(even)', 'props': [('background-color', LIGHT_GREY)]},
+        {'selector': 'tbody tr:nth-child(odd)', 'props': [('background-color', WHITE)]},
+        {'selector': 'th.col_heading', 'props': [('text-align', 'left')]},
+        {'selector': 'td', 'props': [('text-align', 'left')]},
+        {'selector': '', 'props': [('border', f'1px solid {GREY}')]}
+    ]).set_caption(title)
+
 def generate_pdf(result, calculation_mode, client_rate=None, base_rate=None, pay_rate=None, margin=None, employer_deductions=None, status="Inside IR35"):
     """Generate PDF report with proper IR35 status handling"""
     pdf = FPDF()
@@ -307,7 +325,46 @@ def generate_pdf(result, calculation_mode, client_rate=None, base_rate=None, pay
     return pdf.output(dest='S').encode('latin1')
 
 # Streamlit App Configuration
-st.set_page_config(page_title="IR35 Tax Calculator", layout="wide")
+st.set_page_config(page_title="IR35 Tax Calculator", layout="wide", page_icon="📊")
+
+# Custom CSS for styling
+st.markdown(f"""
+    <style>
+        .main {{
+            background-color: {WHITE};
+        }}
+        .stButton>button {{
+            background-color: {ORANGE};
+            color: white;
+            border: none;
+        }}
+        .stButton>button:hover {{
+            background-color: {GREY};
+            color: white;
+        }}
+        .stRadio>div>div {{
+            background-color: {LIGHT_GREY};
+            padding: 10px;
+            border-radius: 5px;
+        }}
+        .stNumberInput>div>div>input {{
+            background-color: {LIGHT_GREY};
+        }}
+        .stSelectbox>div>div>select {{
+            background-color: {LIGHT_GREY};
+        }}
+        .stDateInput>div>div>input {{
+            background-color: {LIGHT_GREY};
+        }}
+        .css-1aumxhk {{
+            background-color: {GREY};
+            color: white;
+        }}
+        h1, h2, h3 {{
+            color: {GREY};
+        }}
+    </style>
+    """, unsafe_allow_html=True)
 
 # Add company logo
 try:
@@ -424,7 +481,7 @@ with st.form("calculator_form"):
         )
         
     with col2:
-        # Only show additional inputs when in Pay Rate mode
+        # Additional configuration options
         if st.session_state.status == "Inside IR35":
             st.session_state.employee_pension = st.number_input(
                 "Employee Pension Contribution (%):", 
@@ -458,7 +515,7 @@ with st.form("calculator_form"):
             )
     
     # Submit button
-    submitted = st.form_submit_button("Calculate")
+    submitted = st.form_submit_button("Calculate", use_container_width=True)
     
     if submitted:
         if st.session_state.start_date >= st.session_state.end_date:
@@ -527,94 +584,100 @@ if st.session_state.get('results'):
     if st.session_state.status == "Outside IR35":
         # Outside IR35 Results
         st.write("### Outside IR35 - Self-Employed Consultant")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.write(f"**Base Rate = Pay Rate:** £{round(st.session_state.pay_rate)}")
-            st.write(f"**Working Days:** {st.session_state.results['Working Days']}")
-            st.write(f"**Project Total:** £{round(st.session_state.results['Project Total'])}")
-        with col2:
-            if st.session_state.results['VAT Amount'] > 0:
-                st.write(f"**VAT Charged to Client (20%):** £{round(st.session_state.results['VAT Amount'])}")
+        
+        # Create summary table
+        summary_data = [
+            ["Base Rate = Pay Rate", f"£{round(st.session_state.pay_rate)}"],
+            ["Working Days", st.session_state.results['Working Days']],
+            ["Project Total", f"£{round(st.session_state.results['Project Total'])}"]
+        ]
+        
+        if st.session_state.results['VAT Amount'] > 0:
+            summary_data.append(["VAT Charged to Client (20%)", f"£{round(st.session_state.results['VAT Amount'])}"])
+        
+        df_summary = pd.DataFrame(summary_data, columns=["Metric", "Value"])
+        st.dataframe(styled_dataframe(df_summary), use_container_width=True)
         
         st.warning(st.session_state.results['Disclaimer'])
     else:
         # Inside IR35 Results
         st.write("### Rate Summary")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Client Rate", f"£{round(st.session_state.client_rate)}")
-        with col2:
-            st.metric("Base Rate", f"£{round(st.session_state.base_rate)}")
-        with col3:
-            st.metric("Pay Rate", f"£{round(st.session_state.pay_rate)}")
+        
+        # Create rate summary table
+        rate_data = [
+            ["Client Rate", f"£{round(st.session_state.client_rate)}"],
+            ["Base Rate", f"£{round(st.session_state.base_rate)}"],
+            ["Pay Rate", f"£{round(st.session_state.pay_rate)}"]
+        ]
+        df_rates = pd.DataFrame(rate_data, columns=["Rate Type", "Daily Amount"])
+        st.dataframe(styled_dataframe(df_rates), use_container_width=True)
         
         # Margin and Employer Deductions
         st.write("### Margin & Deductions")
         col1, col2 = st.columns(2)
+        
         with col1:
             if st.session_state.margin:
-                st.write(f"**Margin Percentage:** {st.session_state.margin['Margin Percentage']}%")
-                st.write(f"**Daily Margin:** £{st.session_state.margin['Daily Margin']:,}")
-                st.write(f"**Total Margin:** £{st.session_state.margin['Total Margin']:,}")
+                margin_data = [
+                    ["Margin Percentage", f"{st.session_state.margin['Margin Percentage']}%"],
+                    ["Daily Margin", f"£{st.session_state.margin['Daily Margin']}"],
+                    ["Total Margin", f"£{st.session_state.margin['Total Margin']}"]
+                ]
+                df_margin = pd.DataFrame(margin_data, columns=["Metric", "Value"])
+                st.dataframe(styled_dataframe(df_margin), use_container_width=True)
             else:
                 st.warning("Margin data is not available.")
+        
         with col2:
             if st.session_state.employer_deductions:
-                st.write("**Employer Deductions (Daily):**")
-                st.write(f"- NI (15%): £{st.session_state.employer_deductions['Daily Employer NI']}")
-                st.write(f"- Pension (3%): £{st.session_state.employer_deductions['Daily Employer Pension']}")
-                st.write(f"- Levy (0.5%): £{st.session_state.employer_deductions['Daily Apprentice Levy']}")
-                st.write("**Total Deductions:**")
-                st.write(f"- NI: £{st.session_state.employer_deductions['Total Employer NI']}")
-                st.write(f"- Pension: £{st.session_state.employer_deductions['Total Employer Pension']}")
-                st.write(f"- Levy: £{st.session_state.employer_deductions['Total Apprentice Levy']}")
+                deductions_data = [
+                    ["Daily Employer NI (15%)", f"£{st.session_state.employer_deductions['Daily Employer NI']}"],
+                    ["Daily Employer Pension (3%)", f"£{st.session_state.employer_deductions['Daily Employer Pension']}"],
+                    ["Daily Apprentice Levy (0.5%)", f"£{st.session_state.employer_deductions['Daily Apprentice Levy']}"],
+                    ["Total Employer NI", f"£{st.session_state.employer_deductions['Total Employer NI']}"],
+                    ["Total Employer Pension", f"£{st.session_state.employer_deductions['Total Employer Pension']}"],
+                    ["Total Apprentice Levy", f"£{st.session_state.employer_deductions['Total Apprentice Levy']}"],
+                    ["Total Employer Deductions", f"£{st.session_state.employer_deductions['Total Employer Deductions']}"]
+                ]
+                df_deductions = pd.DataFrame(deductions_data, columns=["Deduction", "Amount"])
+                st.dataframe(styled_dataframe(df_deductions), use_container_width=True)
         
         # Time Period Breakdown
         st.write("### Project Breakdown")
         days_in_month = 20  # Standard assumption
         
-        # Daily rates
-        daily_gross = st.session_state.pay_rate
-        daily_net = st.session_state.results["Net Take-Home Pay"] / st.session_state.working_days
-        
-        # Monthly rates (20 working days)
-        monthly_gross = daily_gross * days_in_month
-        monthly_net = daily_net * days_in_month
-        
-        # Project totals
-        project_gross = daily_gross * st.session_state.working_days
-        project_net = st.session_state.results["Net Take-Home Pay"]
-        
-        # Display in columns
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.write("**Daily Rates**")
-            st.write(f"Gross: £{round(daily_gross)}")
-            st.write(f"Net: £{round(daily_net)}")
-        with col2:
-            st.write("**Monthly Rates (20 days)**")
-            st.write(f"Gross: £{round(monthly_gross)}")
-            st.write(f"Net: £{round(monthly_net)}")
-        with col3:
-            st.write(f"**Project Total ({st.session_state.working_days} days)**")
-            st.write(f"Gross: £{round(project_gross)}")
-            st.write(f"Net: £{round(project_net)}")
+        # Create breakdown data
+        breakdown_data = [
+            ["Daily Rates", f"£{round(st.session_state.pay_rate)}", f"£{round(st.session_state.results['Net Take-Home Pay'] / st.session_state.working_days)}"],
+            ["Monthly Rates (20 days)", f"£{round(st.session_state.pay_rate * days_in_month)}", f"£{round((st.session_state.results['Net Take-Home Pay'] / st.session_state.working_days) * days_in_month)}"],
+            [f"Project Total ({st.session_state.working_days} days)", f"£{round(st.session_state.pay_rate * st.session_state.working_days)}", f"£{round(st.session_state.results['Net Take-Home Pay'])}"]
+        ]
+        df_breakdown = pd.DataFrame(breakdown_data, columns=["Period", "Gross", "Net"])
+        st.dataframe(styled_dataframe(df_breakdown), use_container_width=True)
         
         # Payslip Breakdown
         basic_rate, holiday_pay = calculate_holiday_components(st.session_state.pay_rate)
         st.write("### Payslip Breakdown (Compliance)")
-        st.write(f"**Basic Daily Rate (excl. holiday pay):** £{basic_rate}")
-        st.write(f"**Holiday Pay (per day):** £{holiday_pay}")
+        payslip_data = [
+            ["Basic Daily Rate (excl. holiday pay)", f"£{basic_rate}"],
+            ["Holiday Pay (per day)", f"£{holiday_pay}"]
+        ]
+        df_payslip = pd.DataFrame(payslip_data, columns=["Component", "Amount"])
+        st.dataframe(styled_dataframe(df_payslip), use_container_width=True)
         st.caption("Note: These values are for compliance purposes only and not used in negotiations.")
         
         # Detailed Breakdown
         st.write("### Detailed Breakdown")
+        breakdown_items = []
         for key, value in st.session_state.results.items():
             if key not in ["VAT Amount", "Working Days", "Disclaimer"]:
-                st.write(f"**{key}:** £{value}")
+                breakdown_items.append([key.replace("_", " ").title(), f"£{value}"])
+        
+        df_details = pd.DataFrame(breakdown_items, columns=["Item", "Amount"])
+        st.dataframe(styled_dataframe(df_details), use_container_width=True)
     
     # Generate Report Button
-    if st.button("Generate PDF Report"):
+    if st.button("Generate PDF Report", use_container_width=True):
         pdf_data = generate_pdf(
             st.session_state.results,
             st.session_state.calculation_mode,
@@ -629,7 +692,8 @@ if st.session_state.get('results'):
             "Download Report",
             data=pdf_data,
             file_name="IR35_Tax_Report.pdf",
-            mime="application/pdf"
+            mime="application/pdf",
+            use_container_width=True
         )
 
 # Comparison Mode
@@ -670,7 +734,7 @@ if st.session_state.compare_mode:
             key="outside_vat_checkbox"
         )
     
-    if st.button("Compare Scenarios", key="compare_button"):
+    if st.button("Compare Scenarios", key="compare_button", use_container_width=True):
         # Calculate working days for comparison
         working_days = calculate_working_days(
             st.session_state.start_date,
@@ -691,31 +755,4 @@ if st.session_state.compare_mode:
         
         # Outside IR35 scenario
         outside_result = ir35_tax_calculator(
-            outside_base_rate, working_days, 
-            0.0, "None", "Outside IR35", outside_vat
-        )
-        
-        # Display comparison
-        col1, col2 = st.columns(2)
-        with col1:
-            st.write("### Inside IR35")
-            st.write(f"**Pay Rate:** £{round(inside_pay_rate)}")
-            st.write(f"**Base Rate:** £{round(inside_base_rate)}")
-            st.write("**Employer Deductions (Daily):**")
-            st.write(f"- NI (15%): £{inside_employer_deductions['Daily Employer NI']}")
-            st.write(f"- Pension (3%): £{inside_employer_deductions['Daily Employer Pension']}")
-            st.write(f"- Levy (0.5%): £{inside_employer_deductions['Daily Apprentice Levy']}")
-            st.write(f"**Daily Net:** £{round(inside_result['Net Take-Home Pay']/working_days)}")
-            st.write(f"**Project Net:** £{round(inside_result['Net Take-Home Pay'])}")
-        
-        with col2:
-            st.write("### Outside IR35")
-            st.write(f"**Base Rate = Pay Rate:** £{round(outside_base_rate)}")
-            if outside_vat:
-                st.write(f"**VAT Charged to Client (20%):** £{round(outside_result['VAT Amount'])}")
-            st.write(f"**Project Total:** £{round(outside_result['Project Total'])}")
-            st.warning("Self-employed consultants must calculate their own taxes")
-        
-        # Difference calculation
-        difference = outside_result['Project Total'] - inside_result['Net Take-Home Pay']
-        st.write(f"**Gross Difference (Outside - Inside):** £{round(difference)}")
+            outside
