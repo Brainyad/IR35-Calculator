@@ -724,7 +724,6 @@ if st.session_state.compare_mode:
     
     if st.button("Compare Scenarios", key="compare_button", use_container_width=True):
         try:
-            # Calculate working days for comparison
             working_days = calculate_working_days(
                 st.session_state.start_date,
                 st.session_state.end_date,
@@ -732,36 +731,45 @@ if st.session_state.compare_mode:
                 bank_holidays
             )
             
-            # Inside IR35 scenario
+            # Inside IR35 calculations
             inside_base_rate = calculate_base_rate_from_pay(inside_pay_rate)
-            inside_client_rate = calculate_client_rate(
-                inside_base_rate,
-                st.session_state.margin_percent
-            )
-            inside_employer_deductions = calculate_employer_deductions(inside_base_rate, working_days)
-            inside_margin = calculate_margin(
-                inside_client_rate,
-                inside_base_rate,
-                working_days
-            )
+            inside_client_rate = calculate_client_rate(inside_base_rate, st.session_state.margin_percent)
             inside_result = ir35_tax_calculator(
                 inside_pay_rate, working_days, 
                 st.session_state.employee_pension,
                 st.session_state.student_loan,
                 "Inside IR35", False
             )
+            inside_margin = calculate_margin(inside_client_rate, inside_base_rate, working_days)
             
-            # Outside IR35 scenario
-            outside_client_rate = calculate_client_rate(
-                outside_base_rate,
-                st.session_state.margin_percent
-            )
-            outside_margin = calculate_margin(
-                outside_client_rate,
-                outside_base_rate,
-                working_days
-            )
+            # Outside IR35 calculations
+            outside_client_rate = calculate_client_rate(outside_base_rate, st.session_state.margin_percent)
             outside_result = ir35_tax_calculator(
                 outside_base_rate, working_days, 
                 0.0, "None", "Outside IR35", outside_vat
-            )  
+            )
+            outside_margin = calculate_margin(outside_client_rate, outside_base_rate, working_days)
+            
+            # Display results
+            st.write("### Comparison Results")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.write("**Inside IR35**")
+                st.write(f"Pay Rate: £{inside_pay_rate}")
+                st.write(f"Margin: {inside_margin['Margin Percentage']}% (£{inside_margin['Daily Margin']}/day)")
+                st.write(f"Net Take-Home: £{inside_result['Net Take-Home Pay']}")
+            
+            with col2:
+                st.write("**Outside IR35**")
+                st.write(f"Base Rate: £{outside_base_rate}")
+                st.write(f"Margin: {outside_margin['Margin Percentage']}% (£{outside_margin['Daily Margin']}/day)")
+                st.write(f"Project Total: £{outside_result['Project Total']}")
+                if outside_vat:
+                    st.write(f"+ VAT: £{outside_result['VAT Amount']}")
+            
+            difference = outside_result['Project Total'] - inside_result['Net Take-Home Pay']
+            st.write(f"**Difference (Outside - Inside):** £{difference}")
+            
+        except Exception as e:
+            st.error(f"Comparison error: {str(e)}")
