@@ -1,6 +1,6 @@
 # ======================
 # IR35 TAX CALCULATOR
-# Complete Version 3.0
+# Complete Version 4.0
 # ======================
 
 import streamlit as st
@@ -17,6 +17,20 @@ GREY = "#515D7A"
 ORANGE = "#F39200"
 LIGHT_GREY = "#F5F5F5"
 WHITE = "#FFFFFF"
+
+# Tooltip explanations
+TOOLTIPS = {
+    "client_rate": "The daily rate charged to your end client (before any margin or deductions)",
+    "base_rate": "The rate before employer deductions (Client Rate minus Margin)",
+    "pay_rate": "Your gross daily pay before tax/NI deductions",
+    "margin_percent": "The agency/umbrella company's percentage margin",
+    "working_days": "Calculated working days excluding weekends and bank holidays",
+    "employer_pension": "Mandatory employer pension contribution (3% minimum)",
+    "employee_pension": "Your personal pension contribution (default 5%)",
+    "student_loan": "Select your student loan repayment plan if applicable",
+    "vat_registered": "Whether you're VAT registered (only for Outside IR35)",
+    "holiday_pay": "Statutory holiday pay included in your pay rate (Inside IR35 only)"
+}
 
 # ----------
 # SESSION STATE
@@ -286,7 +300,7 @@ def generate_pdf(result, calculation_mode, client_rate=None, base_rate=None,
     return pdf.output(dest='S').encode('latin1')
 
 # ----------
-# STREAMLIT UI
+# UI COMPONENTS
 # ----------
 def styled_dataframe(df, title=""):
     return df.style.set_table_styles([
@@ -298,6 +312,32 @@ def styled_dataframe(df, title=""):
         {'selector': '', 'props': [('border', f'1px solid {GREY}')]}
     ]).set_caption(title)
 
+def create_tooltip(text):
+    return f"""
+    <span style="color:{GREY}; cursor:pointer;" title="{text}">ℹ️</span>
+    """
+
+def create_input_with_tooltip(label, key, value=None, step=None, min_value=None, max_value=None, options=None, tooltip_key=None):
+    col1, col2 = st.columns([4, 1])
+    with col1:
+        if options:
+            selected = st.selectbox(label, options, index=options.index(value) if value in options else 0, key=key)
+        else:
+            selected = st.number_input(
+                label,
+                value=float(value) if value is not None else 0.0,
+                step=float(step) if step else 1.0,
+                min_value=float(min_value) if min_value else None,
+                max_value=float(max_value) if max_value else None,
+                key=key
+            )
+    with col2:
+        st.markdown(f"<div style='height:30px; display:flex; align-items:center;'>{create_tooltip(TOOLTIPS.get(tooltip_key or key.lower(), ''))}</div>", unsafe_allow_html=True)
+    return selected
+
+# ----------
+# MAIN APP
+# ----------
 def main():
     st.set_page_config(page_title="IR35 Tax Calculator", layout="wide", page_icon="📊")
     
@@ -327,6 +367,10 @@ def main():
             h1, h2, h3 {{
                 color: {GREY};
                 text-align: center;
+            }}
+            .stTooltip {{
+                background-color: {GREY} !important;
+                color: white !important;
             }}
         </style>
         """, unsafe_allow_html=True)
@@ -361,52 +405,63 @@ def main():
         
         with col1:
             if st.session_state.calculation_mode == "Client Rate":
-                st.session_state.client_rate = st.number_input(
-                    "Client Charge Rate (£):", 
-                    min_value=0.0, 
-                    value=float(st.session_state.client_rate),
-                    step=50.0
+                st.session_state.client_rate = create_input_with_tooltip(
+                    "Client Charge Rate (£):",
+                    "client_rate",
+                    st.session_state.client_rate,
+                    step=50.0,
+                    tooltip_key="client_rate"
                 )
-                st.session_state.margin_percent = st.number_input(
-                    "Margin (%):", 
-                    min_value=0.0, 
-                    max_value=100.0, 
-                    value=float(st.session_state.margin_percent),
-                    step=0.5
+                st.session_state.margin_percent = create_input_with_tooltip(
+                    "Margin (%):",
+                    "margin_percent",
+                    st.session_state.margin_percent,
+                    step=0.5,
+                    min_value=0.0,
+                    max_value=100.0,
+                    tooltip_key="margin_percent"
                 )
             elif st.session_state.calculation_mode == "Base Rate":
-                st.session_state.base_rate = st.number_input(
-                    "Base Rate (£):", 
-                    min_value=0.0, 
-                    value=float(st.session_state.base_rate),
-                    step=50.0
+                st.session_state.base_rate = create_input_with_tooltip(
+                    "Base Rate (£):",
+                    "base_rate",
+                    st.session_state.base_rate,
+                    step=50.0,
+                    tooltip_key="base_rate"
                 )
-                st.session_state.margin_percent = st.number_input(
-                    "Margin (%):", 
-                    min_value=0.0, 
-                    max_value=100.0, 
-                    value=float(st.session_state.margin_percent),
-                    step=0.5
+                st.session_state.margin_percent = create_input_with_tooltip(
+                    "Margin (%):",
+                    "margin_percent",
+                    st.session_state.margin_percent,
+                    step=0.5,
+                    min_value=0.0,
+                    max_value=100.0,
+                    tooltip_key="margin_percent"
                 )
             else:
-                st.session_state.pay_rate = st.number_input(
-                    "Pay Rate (£):", 
-                    min_value=0.0, 
-                    value=float(st.session_state.pay_rate),
-                    step=50.0
+                st.session_state.pay_rate = create_input_with_tooltip(
+                    "Pay Rate (£):",
+                    "pay_rate",
+                    st.session_state.pay_rate,
+                    step=50.0,
+                    tooltip_key="pay_rate"
                 )
-                st.session_state.margin_percent = st.number_input(
-                    "Margin (%):", 
-                    min_value=0.0, 
-                    max_value=100.0, 
-                    value=float(st.session_state.margin_percent),
-                    step=0.5
+                st.session_state.margin_percent = create_input_with_tooltip(
+                    "Margin (%):",
+                    "margin_percent",
+                    st.session_state.margin_percent,
+                    step=0.5,
+                    min_value=0.0,
+                    max_value=100.0,
+                    tooltip_key="margin_percent"
                 )
             
-            st.session_state.days_per_week = st.selectbox(
+            st.session_state.days_per_week = create_input_with_tooltip(
                 "Days worked per week:",
-                [1, 2, 3, 4, 5],
-                index=st.session_state.days_per_week - 1
+                "days_per_week",
+                options=[1, 2, 3, 4, 5],
+                value=st.session_state.days_per_week,
+                tooltip_key="working_days"
             )
         
         with col2:
@@ -421,21 +476,26 @@ def main():
             )
             
             if st.session_state.status == "Inside IR35":
-                st.session_state.employee_pension = st.number_input(
+                st.session_state.employee_pension = create_input_with_tooltip(
                     "Employee Pension Contribution (%):", 
-                    min_value=0.0, 
-                    value=float(st.session_state.employee_pension),
-                    step=0.5
+                    "employee_pension",
+                    st.session_state.employee_pension,
+                    step=0.5,
+                    min_value=0.0,
+                    tooltip_key="employee_pension"
                 )
-                st.session_state.student_loan = st.selectbox(
+                st.session_state.student_loan = create_input_with_tooltip(
                     "Student Loan Plan:", 
-                    ["None", "Plan 1", "Plan 2", "Plan 4", "Plan 5", "Postgraduate Loan"],
-                    index=["None", "Plan 1", "Plan 2", "Plan 4", "Plan 5", "Postgraduate Loan"].index(st.session_state.student_loan)
+                    "student_loan",
+                    options=["None", "Plan 1", "Plan 2", "Plan 4", "Plan 5", "Postgraduate Loan"],
+                    value=st.session_state.student_loan,
+                    tooltip_key="student_loan"
                 )
             else:
                 st.session_state.vat_registered = st.checkbox(
                     "VAT Registered? (20%)", 
-                    value=st.session_state.vat_registered
+                    value=st.session_state.vat_registered,
+                    help=TOOLTIPS["vat_registered"]
                 )
         
         submitted = st.form_submit_button("Calculate")
@@ -606,25 +666,28 @@ def main():
         
         with col1:
             st.write("**Scenario 1 - Inside IR35**")
-            inside_pay_rate = st.number_input(
+            inside_pay_rate = create_input_with_tooltip(
                 "Pay Rate (£)", 
+                "inside_pay_rate",
                 value=400.0,
                 step=50.0,
-                key="inside_pay_rate"
+                tooltip_key="pay_rate"
             )
         
         with col2:
             st.write("**Scenario 2 - Outside IR35**")
-            outside_base_rate = st.number_input(
+            outside_base_rate = create_input_with_tooltip(
                 "Base Rate (£)", 
+                "outside_base_rate",
                 value=500.0,
                 step=50.0,
-                key="outside_base_rate"
+                tooltip_key="base_rate"
             )
             outside_vat = st.checkbox(
                 "VAT Registered?", 
                 value=False,
-                key="outside_vat"
+                key="outside_vat",
+                help=TOOLTIPS["vat_registered"]
             )
         
         if st.button("Compare Scenarios"):
@@ -679,7 +742,7 @@ def main():
                     pd.DataFrame(comparison_data, columns=["Metric", "Inside IR35", "Outside IR35"])
                 ), use_container_width=True)
                 
-                # Manual copy option (no pyperclip)
+                # Manual copy option
                 copy_text = "Metric\tInside IR35\tOutside IR35\n"
                 for row in comparison_data:
                     copy_text += f"{row[0]}\t{row[1]}\t{row[2]}\n"
