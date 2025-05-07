@@ -760,7 +760,103 @@ if st.session_state.compare_mode:
                 0.0, "None", "Outside IR35", outside_vat
             )
             outside_margin = calculate_margin(
-            outside_client_rate,
-            outside_base_rate,
-            working_days
-            ) 
+                outside_client_rate,
+                outside_base_rate,
+                working_days
+            )
+            
+            # Store scenarios for display
+            st.session_state.inside_scenario = {
+                'client_rate': inside_client_rate,
+                'base_rate': inside_base_rate,
+                'pay_rate': inside_pay_rate,
+                'margin': inside_margin,
+                'employer_deductions': inside_employer_deductions,
+                'result': inside_result
+            }
+            
+            st.session_state.outside_scenario = {
+                'client_rate': outside_client_rate,
+                'base_rate': outside_base_rate,
+                'pay_rate': outside_base_rate,  # Same as base rate for Outside IR35
+                'margin': outside_margin,
+                'result': outside_result
+            }
+            
+        except Exception as e:
+            st.error(f"An error occurred during comparison: {str(e)}")
+
+# Display Comparison Results
+if st.session_state.compare_mode and st.session_state.inside_scenario and st.session_state.outside_scenario:
+    st.write("### Comparison Results")
+    
+    # Create comparison data
+    comparison_data = [
+        ["Daily Rate", 
+         f"£{round(st.session_state.inside_scenario['pay_rate'])}", 
+         f"£{round(st.session_state.outside_scenario['pay_rate'])}"],
+        ["Monthly Rate (20 days)", 
+         f"£{round(st.session_state.inside_scenario['pay_rate'] * 20)}", 
+         f"£{round(st.session_state.outside_scenario['pay_rate'] * 20)}"],
+        ["Project Total", 
+         f"£{round(st.session_state.inside_scenario['result']['Net Take-Home Pay'])}", 
+         f"£{round(st.session_state.outside_scenario['result']['Project Total'])}"],
+        ["Effective Daily Rate (Net)", 
+         f"£{round(st.session_state.inside_scenario['result']['Net Take-Home Pay'] / working_days)}", 
+         f"£{round(st.session_state.outside_scenario['result']['Project Total'] / working_days)}"]
+    ]
+    
+    if st.session_state.outside_scenario['result'].get('VAT Amount', 0) > 0:
+        comparison_data.append(["VAT Charged to Client", 
+                              "N/A", 
+                              f"£{round(st.session_state.outside_scenario['result']['VAT Amount'])}"])
+    
+    df_comparison = pd.DataFrame(
+        comparison_data,
+        columns=["Metric", "Inside IR35", "Outside IR35"]
+    )
+    
+    st.dataframe(styled_dataframe(df_comparison), use_container_width=True)
+    
+    # Generate comparison PDF
+    if st.button("Generate Comparison PDF", key="compare_pdf_button", use_container_width=True):
+        inside_pdf = generate_pdf(
+            st.session_state.inside_scenario['result'],
+            "Pay Rate",
+            st.session_state.inside_scenario['client_rate'],
+            st.session_state.inside_scenario['base_rate'],
+            st.session_state.inside_scenario['pay_rate'],
+            st.session_state.inside_scenario['margin'],
+            st.session_state.inside_scenario['employer_deductions'],
+            "Inside IR35"
+        )
+        
+        outside_pdf = generate_pdf(
+            st.session_state.outside_scenario['result'],
+            "Base Rate",
+            st.session_state.outside_scenario['client_rate'],
+            st.session_state.outside_scenario['base_rate'],
+            st.session_state.outside_scenario['pay_rate'],
+            st.session_state.outside_scenario['margin'],
+            None,
+            "Outside IR35"
+        )
+        
+        # Combine PDFs (this would require PyPDF2 or similar library)
+        st.warning("PDF combination functionality would require additional libraries. Currently generating separate PDFs.")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.download_button(
+                "Download Inside IR35 Report",
+                data=inside_pdf,
+                file_name="Inside_IR35_Report.pdf",
+                mime="application/pdf"
+            )
+        with col2:
+            st.download_button(
+                "Download Outside IR35 Report",
+                data=outside_pdf,
+                file_name="Outside_IR35_Report.pdf",
+                mime="application/pdf"
+            )
