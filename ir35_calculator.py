@@ -760,7 +760,7 @@ if st.session_state.compare_mode:
                 0.0, "None", "Outside IR35", outside_vat
             )
             outside_margin = calculate_margin(
-                outside_client_rate,
-                outside_base_rate,
-                working_days
-            )
+            outside_client_rate,
+            outside_base_rate,
+            working_days
+            ) 
