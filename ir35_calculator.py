@@ -12,7 +12,7 @@ ORANGE = "#F39200"
 LIGHT_GREY = "#F5F5F5"
 WHITE = "#FFFFFF"
 
-# Initialize all session state variables with proper defaults
+# Initialize session state
 def initialize_session_state():
     default_state = {
         'results': None,
@@ -31,7 +31,6 @@ def initialize_session_state():
         'base_rate': 500.0,
         'pay_rate': 400.0,
         'margin_percent': 23.0,
-        'employer_deductions': None,
         'margin': None,
         'inside_scenario': None,
         'outside_scenario': None
@@ -557,7 +556,7 @@ with st.form("calculator_form"):
                     st.session_state.vat_registered if st.session_state.status == "Outside IR35" else False
                 )
                 
-                # Calculate margin and deductions for both Inside and Outside IR35
+                # Calculate margin for both statuses
                 st.session_state.margin = calculate_margin(
                     float(st.session_state.client_rate),
                     float(st.session_state.base_rate),
@@ -599,24 +598,21 @@ if st.session_state.get('results'):
     df_margin = pd.DataFrame(margin_data, columns=["Metric", "Value"])
     st.dataframe(styled_dataframe(df_margin), use_container_width=True)
     
-if st.session_state.status == "Outside IR35":
-    # Outside IR35 Results
-    st.write("### Outside IR35 - Self-Employed Consultant")
-    
-    # Create summary table
-    summary_data = [
-        ["Base Rate = Pay Rate", f"£{round(st.session_state.pay_rate)}"],
-        ["Working Days", st.session_state.working_days],
-        ["Project Total", f"£{round(st.session_state.results.get('Project Total', 0))}"]
-    ]
-    
-    if st.session_state.vat_registered:
-        summary_data.append(["VAT Charged to Client (20%)", f"£{round(st.session_state.results.get('VAT Amount', 0))}"])
-    
-    df_summary = pd.DataFrame(summary_data, columns=["Metric", "Value"])
-    st.dataframe(styled_dataframe(df_summary), use_container_width=True)
-    
-    st.warning(st.session_state.results.get('Disclaimer', ""))
+    if st.session_state.status == "Outside IR35":
+        # Outside IR35 Results
+        st.write("### Project Summary")
+        summary_data = [
+            ["Working Days", st.session_state.working_days],
+            ["Project Total", f"£{round(st.session_state.results.get('Project Total', 0))}"]
+        ]
+        
+        if st.session_state.vat_registered:
+            summary_data.append(["VAT Charged to Client (20%)", f"£{round(st.session_state.results.get('VAT Amount', 0))}"])
+        
+        df_summary = pd.DataFrame(summary_data, columns=["Metric", "Value"])
+        st.dataframe(styled_dataframe(df_summary), use_container_width=True)
+        
+        st.warning(st.session_state.results.get('Disclaimer', ""))
     else:
         # Inside IR35 Results
         if st.session_state.employer_deductions:
@@ -727,6 +723,7 @@ if st.session_state.compare_mode:
     
     if st.button("Compare Scenarios", key="compare_button", use_container_width=True):
         try:
+            # Calculate working days for comparison
             working_days = calculate_working_days(
                 st.session_state.start_date,
                 st.session_state.end_date,
@@ -734,45 +731,35 @@ if st.session_state.compare_mode:
                 bank_holidays
             )
             
-            # Inside IR35 calculations
+            # Inside IR35 scenario
             inside_base_rate = calculate_base_rate_from_pay(inside_pay_rate)
-            inside_client_rate = calculate_client_rate(inside_base_rate, st.session_state.margin_percent)
+            inside_client_rate = calculate_client_rate(
+                inside_base_rate,
+                st.session_state.margin_percent
+            )
+            inside_employer_deductions = calculate_employer_deductions(inside_base_rate, working_days)
+            inside_margin = calculate_margin(
+                inside_client_rate,
+                inside_base_rate,
+                working_days
+            )
             inside_result = ir35_tax_calculator(
                 inside_pay_rate, working_days, 
                 st.session_state.employee_pension,
                 st.session_state.student_loan,
                 "Inside IR35", False
             )
-            inside_margin = calculate_margin(inside_client_rate, inside_base_rate, working_days)
             
-            # Outside IR35 calculations
-            outside_client_rate = calculate_client_rate(outside_base_rate, st.session_state.margin_percent)
+            # Outside IR35 scenario
+            outside_client_rate = calculate_client_rate(
+                outside_base_rate,
+                st.session_state.margin_percent
+            )
             outside_result = ir35_tax_calculator(
                 outside_base_rate, working_days, 
                 0.0, "None", "Outside IR35", outside_vat
             )
-            outside_margin = calculate_margin(outside_client_rate, outside_base_rate, working_days)
-            
-            # Display results
-            st.write("### Comparison Results")
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.write("**Inside IR35**")
-                st.write(f"Pay Rate: £{inside_pay_rate}")
-                st.write(f"Margin: {inside_margin['Margin Percentage']}% (£{inside_margin['Daily Margin']}/day)")
-                st.write(f"Net Take-Home: £{inside_result['Net Take-Home Pay']}")
-            
-            with col2:
-                st.write("**Outside IR35**")
-                st.write(f"Base Rate: £{outside_base_rate}")
-                st.write(f"Margin: {outside_margin['Margin Percentage']}% (£{outside_margin['Daily Margin']}/day)")
-                st.write(f"Project Total: £{outside_result['Project Total']}")
-                if outside_vat:
-                    st.write(f"+ VAT: £{outside_result['VAT Amount']}")
-            
-            difference = outside_result['Project Total'] - inside_result['Net Take-Home Pay']
-            st.write(f"**Difference (Outside - Inside):** £{difference}")
-            
-        except Exception as e:
-            st.error(f"Comparison error: {str(e)}")
+            outside_margin = calculate_margin(
+                outside_client_rate,
+                outside_base_rate,
+                working_days
