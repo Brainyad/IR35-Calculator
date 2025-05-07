@@ -1,10 +1,9 @@
 import streamlit as st
 from PIL import Image
-from fpdf import FPDF
 import requests
 from datetime import datetime, timedelta
-import math
 import pandas as pd
+import pyperclip  # For copy to clipboard functionality
 
 # Company Colors
 GREY = "#515D7A"
@@ -87,13 +86,19 @@ def calculate_client_rate(base_rate, margin_percent):
     """Calculate Client Rate from Base Rate and margin"""
     return base_rate / (1 - margin_percent/100)
 
-def calculate_pay_rate(base_rate):
+def calculate_pay_rate(base_rate, status="Inside IR35"):
     """Calculate Pay Rate from Base Rate with employer deductions (Inside IR35)"""
-    return base_rate / 1.185  # 15% NI + 3% Pension + 0.5% Levy = 18.5%
+    if status == "Inside IR35":
+        return base_rate / 1.185  # 15% NI + 3% Pension + 0.5% Levy = 18.5%
+    else:
+        return base_rate  # For Outside IR35, pay rate equals base rate
 
-def calculate_base_rate_from_pay(pay_rate):
-    """Calculate Base Rate from Pay Rate (Inside IR35)"""
-    return pay_rate * 1.185
+def calculate_base_rate_from_pay(pay_rate, status="Inside IR35"):
+    """Calculate Base Rate from Pay Rate"""
+    if status == "Inside IR35":
+        return pay_rate * 1.185
+    else:
+        return pay_rate  # For Outside IR35, base rate equals pay rate
 
 def calculate_employer_deductions(base_rate, working_days):
     """Calculate employer NI, pension, and levy amounts (daily and total)"""
@@ -217,113 +222,6 @@ def styled_dataframe(df, title=""):
         {'selector': 'td', 'props': [('text-align', 'left')]},
         {'selector': '', 'props': [('border', f'1px solid {GREY}')]}
     ]).set_caption(title)
-
-def generate_pdf(result, calculation_mode, client_rate=None, base_rate=None, pay_rate=None, margin=None, employer_deductions=None, status="Inside IR35"):
-    """Generate PDF report with proper IR35 status handling"""
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=12)
-    
-    # Main title
-    pdf.set_font("Arial", size=16, style='B')
-    pdf.cell(200, 10, "IR35 Tax Calculation Results", ln=True, align='C')
-    pdf.ln(10)
-    
-    # Rate Summary
-    pdf.set_font("Arial", size=12, style='B')
-    pdf.cell(200, 8, "Rate Summary", ln=True)
-    pdf.set_font("Arial", size=11)
-    
-    if status == "Outside IR35":
-        pdf.cell(200, 8, f"Base Rate = Pay Rate: £{round(pay_rate)}", ln=True)
-        pdf.cell(200, 8, f"Working Days: {result['Working Days']}", ln=True)
-        pdf.cell(200, 8, f"Project Total: £{round(result['Project Total'])}", ln=True)
-        if result['VAT Amount'] > 0:
-            pdf.cell(200, 8, f"VAT Charged to Client (20%): £{round(result['VAT Amount'])}", ln=True)
-    else:
-        if calculation_mode == "Client Rate":
-            pdf.cell(200, 8, f"Client Rate: £{round(client_rate)}", ln=True)
-            pdf.cell(200, 8, f"Margin: {margin['Margin Percentage']}% (£{margin['Daily Margin']}/day)", ln=True)
-            pdf.cell(200, 8, f"Base Rate: £{round(base_rate)}", ln=True)
-        elif calculation_mode == "Base Rate":
-            pdf.cell(200, 8, f"Base Rate: £{round(base_rate)}", ln=True)
-            pdf.cell(200, 8, f"Margin: {margin['Margin Percentage']}% (£{margin['Daily Margin']}/day)", ln=True)
-            pdf.cell(200, 8, f"Client Rate: £{round(client_rate)}", ln=True)
-        else:
-            pdf.cell(200, 8, f"Pay Rate: £{round(pay_rate)}", ln=True)
-            pdf.cell(200, 8, f"Base Rate: £{round(base_rate)}", ln=True)
-            pdf.cell(200, 8, f"Margin: {margin['Margin Percentage']}% (£{margin['Daily Margin']}/day)", ln=True)
-            pdf.cell(200, 8, f"Client Rate: £{round(client_rate)}", ln=True)
-    
-    # Inside IR35 Deductions
-    if status == "Inside IR35" and employer_deductions:
-        pdf.ln(5)
-        pdf.set_font("Arial", size=12, style='B')
-        pdf.cell(200, 8, "Employer Deductions", ln=True)
-        pdf.set_font("Arial", size=11)
-        pdf.cell(200, 8, f"Daily Employer NI (15%): £{employer_deductions['Daily Employer NI']}", ln=True)
-        pdf.cell(200, 8, f"Daily Employer Pension (3%): £{employer_deductions['Daily Employer Pension']}", ln=True)
-        pdf.cell(200, 8, f"Daily Apprentice Levy (0.5%): £{employer_deductions['Daily Apprentice Levy']}", ln=True)
-        pdf.cell(200, 8, f"Total Employer NI: £{employer_deductions['Total Employer NI']}", ln=True)
-        pdf.cell(200, 8, f"Total Employer Pension: £{employer_deductions['Total Employer Pension']}", ln=True)
-        pdf.cell(200, 8, f"Total Apprentice Levy: £{employer_deductions['Total Apprentice Levy']}", ln=True)
-        pdf.cell(200, 8, f"Total Employer Deductions: £{employer_deductions['Total Employer Deductions']}", ln=True)
-    
-    # Project Breakdown
-    pdf.ln(5)
-    pdf.set_font("Arial", size=12, style='B')
-    pdf.cell(200, 8, "Project Breakdown", ln=True)
-    pdf.set_font("Arial", size=11)
-    
-    if status == "Inside IR35":
-        daily_gross = pay_rate
-        daily_net = result["Net Take-Home Pay"] / result["Working Days"]
-        monthly_gross = daily_gross * 20
-        monthly_net = daily_net * 20
-        
-        pdf.cell(200, 8, f"Daily Gross: £{round(daily_gross)}", ln=True)
-        pdf.cell(200, 8, f"Daily Net: £{round(daily_net)}", ln=True)
-        pdf.cell(200, 8, f"Monthly Gross (20 days): £{round(monthly_gross)}", ln=True)
-        pdf.cell(200, 8, f"Monthly Net (20 days): £{round(monthly_net)}", ln=True)
-        pdf.cell(200, 8, f"Project Gross Total: £{round(result['Gross Income'])}", ln=True)
-        pdf.cell(200, 8, f"Project Net Total: £{round(result['Net Take-Home Pay'])}", ln=True)
-        
-        # Payslip Breakdown
-        basic_rate, holiday_pay = calculate_holiday_components(pay_rate)
-        pdf.ln(5)
-        pdf.set_font("Arial", size=12, style='B')
-        pdf.cell(200, 8, "Payslip Breakdown (Compliance)", ln=True)
-        pdf.set_font("Arial", size=11)
-        pdf.cell(200, 8, f"Basic Daily Rate (excl. holiday pay): £{basic_rate}", ln=True)
-        pdf.cell(200, 8, f"Holiday Pay (per day): £{holiday_pay}", ln=True)
-    
-    # Detailed Breakdown for Inside IR35
-    if status == "Inside IR35":
-        pdf.ln(5)
-        pdf.set_font("Arial", size=12, style='B')
-        pdf.cell(200, 8, "Detailed Breakdown", ln=True)
-        pdf.set_font("Arial", size=11)
-        
-        pdf.cell(200, 8, f"Gross Income: £{result['Gross Income']}", ln=True)
-        pdf.cell(200, 8, f"Income Tax: £{result['Income Tax']}", ln=True)
-        pdf.cell(200, 8, f"Employee NI: £{result['Employee NI']}", ln=True)
-        pdf.cell(200, 8, f"Employee Pension: £{result['Employee Pension']}", ln=True)
-        if result.get('Student Loan Repayment', 0) > 0:
-            pdf.cell(200, 8, f"Student Loan Repayment: £{result['Student Loan Repayment']}", ln=True)
-    
-    # Disclaimer
-    pdf.ln(10)
-    pdf.set_font("Arial", size=8)
-    pdf.set_text_color(128, 128, 128)  # Grey color
-    
-    if status == "Outside IR35":
-        pdf.cell(200, 8, "**Disclaimer:**", ln=True)
-        pdf.multi_cell(190, 5, "As a self-employed consultant, you are responsible for calculating and paying your own taxes and National Insurance via Self Assessment. These figures show gross amounts only and do not constitute tax advice.")
-    else:
-        pdf.cell(200, 8, "**Disclaimer:**", ln=True)
-        pdf.multi_cell(190, 5, "The figures provided are for illustrative purposes only and may vary depending on individual circumstances. This tool is not intended to provide tax, legal, or accounting advice. Consult a qualified professional for advice tailored to your situation.")
-    
-    return pdf.output(dest='S').encode('latin1')
 
 # Streamlit App Configuration
 st.set_page_config(page_title="IR35 Tax Calculator", layout="wide", page_icon="📊")
@@ -532,15 +430,24 @@ with st.form("calculator_form"):
                         float(st.session_state.client_rate),
                         float(st.session_state.margin_percent)
                     )
-                    st.session_state.pay_rate = calculate_pay_rate(float(st.session_state.base_rate))
+                    st.session_state.pay_rate = calculate_pay_rate(
+                        float(st.session_state.base_rate),
+                        st.session_state.status
+                    )
                 elif st.session_state.calculation_mode == "Base Rate":
                     st.session_state.client_rate = calculate_client_rate(
                         float(st.session_state.base_rate),
                         float(st.session_state.margin_percent)
                     )
-                    st.session_state.pay_rate = calculate_pay_rate(float(st.session_state.base_rate))
+                    st.session_state.pay_rate = calculate_pay_rate(
+                        float(st.session_state.base_rate),
+                        st.session_state.status
+                    )
                 elif st.session_state.calculation_mode == "Pay Rate":
-                    st.session_state.base_rate = calculate_base_rate_from_pay(float(st.session_state.pay_rate))
+                    st.session_state.base_rate = calculate_base_rate_from_pay(
+                        float(st.session_state.pay_rate),
+                        st.session_state.status
+                    )
                     st.session_state.client_rate = calculate_client_rate(
                         float(st.session_state.base_rate),
                         float(st.session_state.margin_percent)
@@ -662,26 +569,6 @@ if st.session_state.get('results'):
         
         df_details = pd.DataFrame(breakdown_items, columns=["Item", "Amount"])
         st.dataframe(styled_dataframe(df_details), use_container_width=True)
-    
-    # Generate Report Button
-    if st.button("Generate PDF Report", use_container_width=True):
-        pdf_data = generate_pdf(
-            st.session_state.results,
-            st.session_state.calculation_mode,
-            st.session_state.client_rate,
-            st.session_state.base_rate,
-            st.session_state.pay_rate,
-            st.session_state.margin,
-            st.session_state.employer_deductions,
-            st.session_state.status
-        )
-        st.download_button(
-            "Download Report",
-            data=pdf_data,
-            file_name="IR35_Tax_Report.pdf",
-            mime="application/pdf",
-            use_container_width=True
-        )
 
 # Comparison Mode
 st.subheader("Comparison Mode")
@@ -732,7 +619,7 @@ if st.session_state.compare_mode:
             )
             
             # Inside IR35 scenario
-            inside_base_rate = calculate_base_rate_from_pay(inside_pay_rate)
+            inside_base_rate = calculate_base_rate_from_pay(inside_pay_rate, "Inside IR35")
             inside_client_rate = calculate_client_rate(
                 inside_base_rate,
                 st.session_state.margin_percent
@@ -772,7 +659,8 @@ if st.session_state.compare_mode:
                 'pay_rate': inside_pay_rate,
                 'margin': inside_margin,
                 'employer_deductions': inside_employer_deductions,
-                'result': inside_result
+                'result': inside_result,
+                'working_days': working_days
             }
             
             st.session_state.outside_scenario = {
@@ -780,7 +668,8 @@ if st.session_state.compare_mode:
                 'base_rate': outside_base_rate,
                 'pay_rate': outside_base_rate,  # Same as base rate for Outside IR35
                 'margin': outside_margin,
-                'result': outside_result
+                'result': outside_result,
+                'working_days': working_days
             }
             
         except Exception as e:
@@ -802,8 +691,8 @@ if st.session_state.compare_mode and st.session_state.inside_scenario and st.ses
          f"£{round(st.session_state.inside_scenario['result']['Net Take-Home Pay'])}", 
          f"£{round(st.session_state.outside_scenario['result']['Project Total'])}"],
         ["Effective Daily Rate (Net)", 
-         f"£{round(st.session_state.inside_scenario['result']['Net Take-Home Pay'] / working_days)}", 
-         f"£{round(st.session_state.outside_scenario['result']['Project Total'] / working_days)}"]
+         f"£{round(st.session_state.inside_scenario['result']['Net Take-Home Pay'] / st.session_state.inside_scenario['working_days'])}", 
+         f"£{round(st.session_state.outside_scenario['result']['Project Total'] / st.session_state.outside_scenario['working_days'])}"]
     ]
     
     if st.session_state.outside_scenario['result'].get('VAT Amount', 0) > 0:
@@ -818,45 +707,16 @@ if st.session_state.compare_mode and st.session_state.inside_scenario and st.ses
     
     st.dataframe(styled_dataframe(df_comparison), use_container_width=True)
     
-    # Generate comparison PDF
-    if st.button("Generate Comparison PDF", key="compare_pdf_button", use_container_width=True):
-        inside_pdf = generate_pdf(
-            st.session_state.inside_scenario['result'],
-            "Pay Rate",
-            st.session_state.inside_scenario['client_rate'],
-            st.session_state.inside_scenario['base_rate'],
-            st.session_state.inside_scenario['pay_rate'],
-            st.session_state.inside_scenario['margin'],
-            st.session_state.inside_scenario['employer_deductions'],
-            "Inside IR35"
-        )
+    # Add copy to clipboard button
+    if st.button("Copy Results to Clipboard", key="copy_results_button"):
+        # Convert DataFrame to tab-separated string
+        copy_text = "Metric\tInside IR35\tOutside IR35\n"
+        for row in comparison_data:
+            copy_text += f"{row[0]}\t{row[1]}\t{row[2]}\n"
         
-        outside_pdf = generate_pdf(
-            st.session_state.outside_scenario['result'],
-            "Base Rate",
-            st.session_state.outside_scenario['client_rate'],
-            st.session_state.outside_scenario['base_rate'],
-            st.session_state.outside_scenario['pay_rate'],
-            st.session_state.outside_scenario['margin'],
-            None,
-            "Outside IR35"
-        )
-        
-        # Combine PDFs (this would require PyPDF2 or similar library)
-        st.warning("PDF combination functionality would require additional libraries. Currently generating separate PDFs.")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.download_button(
-                "Download Inside IR35 Report",
-                data=inside_pdf,
-                file_name="Inside_IR35_Report.pdf",
-                mime="application/pdf"
-            )
-        with col2:
-            st.download_button(
-                "Download Outside IR35 Report",
-                data=outside_pdf,
-                file_name="Outside_IR35_Report.pdf",
-                mime="application/pdf"
-            )
+        try:
+            pyperclip.copy(copy_text)
+            st.success("Results copied to clipboard! You can now paste them into Excel or Word.")
+        except Exception as e:
+            st.error(f"Could not copy to clipboard: {str(e)}")
+            st.text_area("Copy these results manually:", copy_text, height=150)
