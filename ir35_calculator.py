@@ -763,3 +763,4 @@ if st.session_state.compare_mode:
                 outside_client_rate,
                 outside_base_rate,
                 working_days
+            )
