@@ -1,11 +1,8 @@
 # ======================
 # IR35 TAX CALCULATOR
-# Complete Version 2.0
+# Complete Version 3.0
 # ======================
 
-# ----------
-# IMPORTS
-# ----------
 import streamlit as st
 from PIL import Image
 from fpdf import FPDF
@@ -133,7 +130,7 @@ def ir35_tax_calculator(pay_rate, working_days, pension_contribution_percent=5,
             "Working Days": working_days,
             "Project Total": round(annual_income),
             "Daily Rate": round(pay_rate),
-            "Disclaimer": "As a self-employed consultant..."
+            "Disclaimer": "As a self-employed consultant, you are responsible for calculating and paying your own taxes and National Insurance via Self Assessment. These figures show gross amounts only."
         }
     else:
         annual_income = pay_rate * working_days
@@ -576,6 +573,7 @@ def main():
                     breakdown_items.append([key.replace("_", " ").title(), f"£{value}"])
             st.dataframe(styled_dataframe(pd.DataFrame(breakdown_items, columns=["Item", "Amount"])), use_container_width=True)
         
+        # PDF Generation Button
         if st.button("Generate PDF Report"):
             pdf_data = generate_pdf(
                 st.session_state.results,
@@ -681,12 +679,12 @@ def main():
                     pd.DataFrame(comparison_data, columns=["Metric", "Inside IR35", "Outside IR35"])
                 ), use_container_width=True)
                 
-                if st.button("Copy Results to Clipboard"):
-                    copy_text = "Metric\tInside IR35\tOutside IR35\n"
-                    for row in comparison_data:
-                        copy_text += f"{row[0]}\t{row[1]}\t{row[2]}\n"
-                    st.text_area("Copy these results manually:", copy_text, height=150)
-                    
+                # Manual copy option (no pyperclip)
+                copy_text = "Metric\tInside IR35\tOutside IR35\n"
+                for row in comparison_data:
+                    copy_text += f"{row[0]}\t{row[1]}\t{row[2]}\n"
+                st.text_area("Copy these results manually:", copy_text, height=150)
+                
             except Exception as e:
                 st.error(f"Comparison error: {str(e)}")
 
