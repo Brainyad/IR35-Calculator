@@ -242,7 +242,7 @@ def generate_pdf(result, calculation_mode, client_rate=None, base_rate=None,
         pdf.cell(200, 8, "Employer Deductions", ln=True)
         pdf.set_font("Arial", size=11)
         pdf.cell(200, 8, f"Daily Employer NI (15%): £{employer_deductions['Daily Employer NI']}", ln=True)
-        pdf.cell(200, 8, f"Daily Employer Pension (3%): £{employer_deductions['Daily Employer Pension']}", ln=True)
+        pdf.cell(200, 8, f"Daily Employer Pension: £{employer_deductions['Daily Employer Pension']}", ln=True)
         pdf.cell(200, 8, f"Daily Apprentice Levy (0.5%): £{employer_deductions['Daily Apprentice Levy']}", ln=True)
         pdf.cell(200, 8, f"Total Employer NI: £{employer_deductions['Total Employer NI']}", ln=True)
         pdf.cell(200, 8, f"Total Employer Pension: £{employer_deductions['Total Employer Pension']}", ln=True)
@@ -574,7 +574,7 @@ def main():
                 st.write("### Employer Deductions")
                 deductions_data = [
                     ["Daily Employer NI (15%)", f"£{st.session_state.employer_deductions['Daily Employer NI']}"],
-                    ["Daily Employer Pension (3%)", f"£{st.session_state.employer_deductions['Daily Employer Pension']}"],
+                    ["Daily Employer Pension", f"£{st.session_state.employer_deductions['Daily Employer Pension']}"],
                     ["Daily Apprentice Levy (0.5%)", f"£{st.session_state.employer_deductions['Daily Apprentice Levy']}"],
                     ["Total Employer NI", f"£{st.session_state.employer_deductions['Total Employer NI']}"],
                     ["Total Employer Pension", f"£{st.session_state.employer_deductions['Total Employer Pension']}"],
