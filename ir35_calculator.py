@@ -1,6 +1,6 @@
 # ======================
 # IR35 TAX CALCULATOR
-# Complete Version 4.2 (Fully Working)
+# Complete Version 4.0
 # ======================
 
 import streamlit as st
@@ -300,7 +300,7 @@ def generate_pdf(result, calculation_mode, client_rate=None, base_rate=None,
     return pdf.output(dest='S').encode('latin1')
 
 # ----------
-# STREAMLIT UI COMPONENTS
+# UI COMPONENTS
 # ----------
 def styled_dataframe(df, title=""):
     return df.style.set_table_styles([
@@ -314,9 +314,7 @@ def styled_dataframe(df, title=""):
 
 def create_tooltip(text):
     return f"""
-    <div class="tooltip">ℹ️
-        <span class="tooltiptext">{text}</span>
-    </div>
+    <span style="color:{GREY}; cursor:pointer;" title="{text}">ℹ️</span>
     """
 
 def create_input_with_tooltip(label, key, value=None, step=None, min_value=None, max_value=None, options=None, tooltip_key=None):
@@ -334,11 +332,7 @@ def create_input_with_tooltip(label, key, value=None, step=None, min_value=None,
                 key=key
             )
     with col2:
-        st.markdown(f"""
-            <div style='height:30px; display:flex; align-items:center;'>
-                {create_tooltip(TOOLTIPS.get(tooltip_key or key.lower(), ''))}
-            </div>
-            """, unsafe_allow_html=True)
+        st.markdown(f"<div style='height:30px; display:flex; align-items:center;'>{create_tooltip(TOOLTIPS.get(tooltip_key or key.lower(), ''))}</div>", unsafe_allow_html=True)
     return selected
 
 # ----------
@@ -374,30 +368,9 @@ def main():
                 color: {GREY};
                 text-align: center;
             }}
-            .tooltip {{
-                position: relative;
-                display: inline-block;
-                margin-left: 10px;
-            }}
-            .tooltip .tooltiptext {{
-                visibility: hidden;
-                width: 200px;
-                background-color: {GREY};
-                color: #fff;
-                text-align: center;
-                border-radius: 6px;
-                padding: 5px;
-                position: absolute;
-                z-index: 1;
-                bottom: 125%;
-                left: 50%;
-                margin-left: -100px;
-                opacity: 0;
-                transition: opacity 0.3s;
-            }}
-            .tooltip:hover .tooltiptext {{
-                visibility: visible;
-                opacity: 1;
+            .stTooltip {{
+                background-color: {GREY} !important;
+                color: white !important;
             }}
         </style>
         """, unsafe_allow_html=True)
@@ -660,9 +633,8 @@ def main():
                     breakdown_items.append([key.replace("_", " ").title(), f"£{value}"])
             st.dataframe(styled_dataframe(pd.DataFrame(breakdown_items, columns=["Item", "Amount"])), use_container_width=True)
         
-        # PDF Generation Button (NOW VISIBLE)
-        st.markdown("---")
-        if st.button("📄 Generate PDF Report"):
+        # PDF Generation Button
+        if st.button("Generate PDF Report"):
             pdf_data = generate_pdf(
                 st.session_state.results,
                 st.session_state.calculation_mode,
@@ -674,9 +646,9 @@ def main():
                 st.session_state.status
             )
             st.download_button(
-                "💾 Download PDF Report",
+                "Download Report",
                 data=pdf_data,
-                file_name=f"IR35_Report_{datetime.now().strftime('%Y%m%d')}.pdf",
+                file_name="IR35_Tax_Report.pdf",
                 mime="application/pdf"
             )
 
