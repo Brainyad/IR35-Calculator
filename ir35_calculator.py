@@ -28,6 +28,7 @@ TOOLTIPS = {
     "student_loan": "Select your student loan repayment plan if applicable",
     "vat_registered": "Whether VAT registered (Outside IR35 only)",
     "holiday_pay": "Statutory holiday pay included (Inside IR35)"
+    "employer_pension": "Mandatory employer pension contribution (3% minimum)",
 }
 
 # ----------
@@ -42,6 +43,7 @@ def initialize_session_state():
             'status': "Inside IR35",
             'working_days': 0,
             'employee_pension': 5.0,
+            'employer_pension_percent': 3.0,
             'student_loan': "None",
             'days_per_week': 5,
             'start_date': datetime.today().date(),
@@ -448,6 +450,14 @@ def main():
                     value=float(st.session_state.employee_pension),
                     step=0.5,
                     help=TOOLTIPS["employee_pension"]
+                )
+                st.session_state.employer_pension_percent = st.number_input(
+                "Employer Pension (%):",
+                min_value=0.0,
+                max_value=100.0,
+                value=float(st.session_state.employer_pension_percent),
+                step=0.5,
+                help=TOOLTIPS["employer_pension"]
                 )
                 st.session_state.student_loan = st.selectbox(
                     "Student Loan Plan:", 
