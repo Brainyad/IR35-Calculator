@@ -27,8 +27,9 @@ TOOLTIPS = {
     "employee_pension": "Your personal pension contribution (default 5%)",
     "student_loan": "Select your student loan repayment plan if applicable",
     "vat_registered": "Whether VAT registered (Outside IR35 only)",
-    "holiday_pay": "Statutory holiday pay included (Inside IR35)"
     "employer_pension": "Mandatory employer pension contribution (3% minimum)",
+    "holiday_pay": "Statutory holiday pay included (Inside IR35)"
+    
 }
 
 # ----------
