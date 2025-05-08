@@ -110,7 +110,7 @@ def calculate_base_rate_from_pay(pay_rate, status="Inside IR35"):
 
 def calculate_employer_deductions(base_rate, working_days):
     daily_ni = base_rate * 0.15
-    daily_pension = base_rate * 0.03
+    daily_pension = base_rate * (st.session_state.employer_pension_percent / 100)
     daily_levy = base_rate * 0.005
     return {
         "Daily Employer NI": round(daily_ni),
