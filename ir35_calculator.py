@@ -13,6 +13,39 @@ import pandas as pd
 # ----------
 # CONSTANTS
 # ----------
+TAX_YEAR_CONFIG = {
+    "tax_year_label": "2025/26 (rUK)",
+    "income_tax": {
+        "personal_allowance": 12570,
+        "basic_rate_limit": 50270,
+        "higher_rate_limit": 125140,
+        "basic_rate": 0.20,
+        "higher_rate": 0.40,
+        "additional_rate": 0.45
+    },
+    "dividend_tax": {
+        "allowance": 500,
+        "basic_rate": 0.0875,
+        "higher_rate": 0.3375,
+        "additional_rate": 0.3935
+    },
+    "national_insurance": {
+        "employee_primary_threshold": 12570,
+        "employee_upper_earnings_limit": 50270,
+        "employee_main_rate": 0.08,
+        "employee_additional_rate": 0.02,
+        "employer_secondary_threshold": 9100,
+        "employer_rate": 0.138
+    },
+    "corporation_tax": {
+        "small_profits_rate": 0.19,
+        "main_rate": 0.25,
+        "lower_limit": 50000,
+        "upper_limit": 250000,
+        "marginal_relief_fraction": 0.015
+    }
+}
+
 GREY = "#515D7A"
 ORANGE = "#F39200"
 LIGHT_GREY = "#F5F5F5"
@@ -27,6 +60,10 @@ TOOLTIPS = {
     "employee_pension": "Your personal pension contribution (default 5%)",
     "student_loan": "Select your student loan repayment plan if applicable",
     "vat_registered": "Whether VAT registered (Outside IR35 only)",
+    "outside_business_type": "Select the Outside IR35 business structure",
+    "allowable_expenses": "Allowable company expenses paid by the limited company",
+    "outside_salary": "Annual director salary paid through PAYE",
+    "dividend_strategy": "How remaining profit is distributed as dividends",
     "employer_pension": "Mandatory employer pension contribution (3% minimum)",
     "holiday_pay": "Statutory holiday pay included (Inside IR35)"
     
@@ -50,6 +87,11 @@ def initialize_session_state():
             'start_date': datetime.today().date(),
             'end_date': (datetime.today() + timedelta(days=180)).date(),
             'vat_registered': False,
+            'outside_business_type': "Limited Company (Director/Shareholder)",
+            'allowable_expenses': 0.0,
+            'outside_salary': 12570.0,
+            'outside_student_loan': "None",
+            'dividend_strategy': "Distribute all profit after corporation tax",
             'client_rate': 800.0,
             'base_rate': 500.0,
             'pay_rate': 400.0,
@@ -131,11 +173,154 @@ def calculate_margin(client_rate, base_rate, working_days):
         "Margin Percentage": round(margin_percent, 1)
     }
 
+def calculate_corporation_tax(profit):
+    corp_tax_config = TAX_YEAR_CONFIG["corporation_tax"]
+    if profit <= 0:
+        return 0
+    if profit <= corp_tax_config["lower_limit"]:
+        return profit * corp_tax_config["small_profits_rate"]
+    if profit >= corp_tax_config["upper_limit"]:
+        return profit * corp_tax_config["main_rate"]
+    # Marginal relief formula (UK): CT = profit * main_rate - (upper_limit - profit) * marginal_relief_fraction
+    return (profit * corp_tax_config["main_rate"]) - (
+        (corp_tax_config["upper_limit"] - profit) * corp_tax_config["marginal_relief_fraction"]
+    )
+
+def calculate_ltd_company_finances(pay_rate, working_days, allowable_expenses, salary, employer_pension_percent, vat_registered):
+    turnover = pay_rate * working_days
+    employer_ni_threshold = TAX_YEAR_CONFIG["national_insurance"]["employer_secondary_threshold"]
+    employer_ni_rate = TAX_YEAR_CONFIG["national_insurance"]["employer_rate"]
+    employer_ni = max(0, salary - employer_ni_threshold) * employer_ni_rate
+    employer_pension = salary * (employer_pension_percent / 100)
+    profit_before_tax = turnover - allowable_expenses - salary - employer_ni - employer_pension
+    corporation_tax = calculate_corporation_tax(profit_before_tax)
+    profit_after_tax = profit_before_tax - corporation_tax
+    dividends_available = max(0, profit_after_tax)
+    vat_output = turnover * 0.2 if vat_registered else 0
+    return {
+        "Turnover": turnover,
+        "Allowable Expenses": allowable_expenses,
+        "Director Salary": salary,
+        "Employer NI": employer_ni,
+        "Employer Pension": employer_pension,
+        "Profit Before Tax": profit_before_tax,
+        "Corporation Tax": corporation_tax,
+        "Profit After Tax": profit_after_tax,
+        "Dividends Available": dividends_available,
+        "VAT Output": vat_output
+    }
+
+def calculate_employee_income_tax(income):
+    tax_config = TAX_YEAR_CONFIG["income_tax"]
+    personal_allowance = tax_config["personal_allowance"]
+    basic_limit = tax_config["basic_rate_limit"]
+    higher_limit = tax_config["higher_rate_limit"]
+    if income <= personal_allowance:
+        return 0
+    if income <= basic_limit:
+        return (income - personal_allowance) * tax_config["basic_rate"]
+    if income <= higher_limit:
+        return ((basic_limit - personal_allowance) * tax_config["basic_rate"]) + (
+            (income - basic_limit) * tax_config["higher_rate"]
+        )
+    return ((basic_limit - personal_allowance) * tax_config["basic_rate"]) + (
+        (higher_limit - basic_limit) * tax_config["higher_rate"]
+    ) + ((income - higher_limit) * tax_config["additional_rate"])
+
+def calculate_employee_ni(income):
+    ni_config = TAX_YEAR_CONFIG["national_insurance"]
+    threshold = ni_config["employee_primary_threshold"]
+    uel = ni_config["employee_upper_earnings_limit"]
+    if income <= threshold:
+        return 0
+    if income <= uel:
+        return (income - threshold) * ni_config["employee_main_rate"]
+    return ((uel - threshold) * ni_config["employee_main_rate"]) + (
+        (income - uel) * ni_config["employee_additional_rate"]
+    )
+
+def calculate_dividend_tax(salary, dividends):
+    tax_config = TAX_YEAR_CONFIG["income_tax"]
+    dividend_config = TAX_YEAR_CONFIG["dividend_tax"]
+    personal_allowance = tax_config["personal_allowance"]
+    basic_band = tax_config["basic_rate_limit"] - personal_allowance
+    higher_band = tax_config["higher_rate_limit"] - personal_allowance
+
+    remaining_allowance = max(0, personal_allowance - salary)
+    taxable_dividends = max(0, dividends - remaining_allowance - dividend_config["allowance"])
+    taxable_salary = max(0, salary - personal_allowance)
+
+    remaining_basic = max(0, basic_band - taxable_salary)
+    basic_dividends = min(remaining_basic, taxable_dividends)
+    remaining_dividends = taxable_dividends - basic_dividends
+
+    remaining_higher = max(0, higher_band - taxable_salary - basic_dividends)
+    higher_dividends = min(remaining_higher, remaining_dividends)
+    additional_dividends = max(0, remaining_dividends - higher_dividends)
+
+    dividend_tax = (
+        (basic_dividends * dividend_config["basic_rate"])
+        + (higher_dividends * dividend_config["higher_rate"])
+        + (additional_dividends * dividend_config["additional_rate"])
+    )
+    return dividend_tax
+
+def calculate_student_loan_repayment(total_income, student_loan_plan):
+    if student_loan_plan == "Plan 1" and total_income > 22015:
+        return (total_income - 22015) * 0.09
+    if student_loan_plan in ["Plan 2", "Plan 5"] and total_income > 27295:
+        return (total_income - 27295) * 0.09
+    if student_loan_plan == "Plan 4" and total_income > 31395:
+        return (total_income - 31395) * 0.09
+    if student_loan_plan == "Postgraduate Loan" and total_income > 21000:
+        return (total_income - 21000) * 0.06
+    return 0
+
+def calculate_personal_taxes(salary, dividends, student_loan_plan):
+    income_tax = calculate_employee_income_tax(salary)
+    employee_ni = calculate_employee_ni(salary)
+    dividend_tax = calculate_dividend_tax(salary, dividends)
+    total_income = salary + dividends
+    student_loan_repayment = calculate_student_loan_repayment(total_income, student_loan_plan)
+    total_tax = income_tax + employee_ni + dividend_tax + student_loan_repayment
+    net_income = total_income - total_tax
+    return {
+        "Salary Income Tax": round(income_tax),
+        "Employee NI": round(employee_ni),
+        "Dividend Tax": round(dividend_tax),
+        "Student Loan Repayment": round(student_loan_repayment),
+        "Total Personal Tax": round(total_tax),
+        "Net Personal Income": round(net_income)
+    }
+
 def ir35_tax_calculator(pay_rate, working_days, pension_contribution_percent=5,
-                       student_loan_plan="None", status="Inside IR35", vat_registered=False):
+                       student_loan_plan="None", status="Inside IR35", vat_registered=False,
+                       allowable_expenses=0.0, salary_amount=12570.0,
+                       employer_pension_percent=3.0, outside_business_type="Limited Company (Director/Shareholder)",
+                       dividend_strategy="Distribute all profit after corporation tax"):
     if status == "Outside IR35":
         annual_income = pay_rate * working_days
         vat_amount = annual_income * 0.2 if vat_registered else 0
+        if outside_business_type == "Limited Company (Director/Shareholder)":
+            company_breakdown = calculate_ltd_company_finances(
+                pay_rate,
+                working_days,
+                allowable_expenses,
+                salary_amount,
+                employer_pension_percent,
+                vat_registered
+            )
+            dividends = company_breakdown["Dividends Available"]
+            personal_breakdown = calculate_personal_taxes(
+                salary_amount,
+                dividends,
+                student_loan_plan
+            )
+            net_take_home = personal_breakdown["Net Personal Income"]
+        else:
+            company_breakdown = {}
+            personal_breakdown = {}
+            net_take_home = 0
         return {
             "Base Rate": pay_rate,
             "Pay Rate": pay_rate,
@@ -143,7 +328,16 @@ def ir35_tax_calculator(pay_rate, working_days, pension_contribution_percent=5,
             "Working Days": working_days,
             "Project Total": round(annual_income),
             "Daily Rate": round(pay_rate),
-            "Disclaimer": "As a self-employed consultant, you are responsible for calculating and paying your own taxes and National Insurance via Self Assessment. These figures show gross amounts only."
+            "Company Breakdown": company_breakdown,
+            "Personal Breakdown": personal_breakdown,
+            "Net Take-Home Pay": round(net_take_home),
+            "Dividend Strategy": dividend_strategy,
+            "Disclaimer": (
+                f"Assumes UK tax year {TAX_YEAR_CONFIG['tax_year_label']} and that this contract is your only "
+                "income source. As a self-employed consultant, you are responsible for calculating and paying your "
+                "own taxes and National Insurance via Self Assessment. These figures are illustrative and do not "
+                "constitute tax advice."
+            )
         }
     else:
         annual_income = pay_rate * working_days
@@ -218,6 +412,7 @@ def generate_pdf(result, calculation_mode, client_rate=None, base_rate=None,
         pdf.cell(200, 8, f"Base Rate = Pay Rate: £{round(pay_rate)}", ln=True)
         pdf.cell(200, 8, f"Working Days: {result['Working Days']}", ln=True)
         pdf.cell(200, 8, f"Project Total: £{round(result['Project Total'])}", ln=True)
+        pdf.cell(200, 8, f"Assumes UK tax year {TAX_YEAR_CONFIG['tax_year_label']}.", ln=True)
         if result['VAT Amount'] > 0:
             pdf.cell(200, 8, f"VAT Charged to Client (20%): £{round(result['VAT Amount'])}", ln=True)
     else:
@@ -285,6 +480,25 @@ def generate_pdf(result, calculation_mode, client_rate=None, base_rate=None,
         pdf.cell(200, 8, f"Employee Pension: £{result['Employee Pension']}", ln=True)
         if result.get('Student Loan Repayment', 0) > 0:
             pdf.cell(200, 8, f"Student Loan Repayment: £{result['Student Loan Repayment']}", ln=True)
+    elif status == "Outside IR35":
+        company_breakdown = result.get("Company Breakdown", {})
+        personal_breakdown = result.get("Personal Breakdown", {})
+        pdf.ln(5)
+        pdf.set_font("Arial", size=12, style='B')
+        pdf.cell(200, 8, "Company Breakdown", ln=True)
+        pdf.set_font("Arial", size=11)
+        for key, value in company_breakdown.items():
+            if key != "VAT Output":
+                pdf.cell(200, 8, f"{key}: £{round(value)}", ln=True)
+        if company_breakdown.get("VAT Output", 0) > 0:
+            pdf.cell(200, 8, f"VAT Output (20%): £{round(company_breakdown['VAT Output'])}", ln=True)
+        pdf.ln(5)
+        pdf.set_font("Arial", size=12, style='B')
+        pdf.cell(200, 8, "Personal Breakdown", ln=True)
+        pdf.set_font("Arial", size=11)
+        for key, value in personal_breakdown.items():
+            pdf.cell(200, 8, f"{key}: £{value}", ln=True)
+        pdf.cell(200, 8, f"Net Take-Home Pay: £{result.get('Net Take-Home Pay', 0)}", ln=True)
     
     # Disclaimer
     pdf.ln(10)
@@ -292,7 +506,7 @@ def generate_pdf(result, calculation_mode, client_rate=None, base_rate=None,
     pdf.set_text_color(128, 128, 128)
     pdf.cell(200, 8, "**Disclaimer:**", ln=True)
     if status == "Outside IR35":
-        pdf.multi_cell(190, 5, "As a self-employed consultant, you are responsible for calculating and paying your own taxes and National Insurance via Self Assessment. These figures show gross amounts only and do not constitute tax advice.")
+        pdf.multi_cell(190, 5, "Assumes UK tax year 2025/26 (rUK) and this contract is your only income source. As a self-employed consultant, you are responsible for calculating and paying your own taxes and National Insurance via Self Assessment. These figures are illustrative and do not constitute tax advice.")
     else:
         pdf.multi_cell(190, 5, "The figures provided are for illustrative purposes only and may vary depending on individual circumstances. This tool is not intended to provide tax, legal, or accounting advice. Consult a qualified professional for advice tailored to your situation.")
     
@@ -351,6 +565,7 @@ def main():
         st.write("")
 
     st.title("IR35 Tax Calculator")
+    st.caption(f"Assumes UK tax year {TAX_YEAR_CONFIG['tax_year_label']}.")
     bank_holidays = get_uk_bank_holidays()
     initialize_session_state()
 
@@ -467,10 +682,50 @@ def main():
                     help=TOOLTIPS["student_loan"]
                 )
             else:
+                st.session_state.outside_business_type = st.selectbox(
+                    "Outside IR35 business type:",
+                    ["Limited Company (Director/Shareholder)"],
+                    index=0,
+                    help=TOOLTIPS["outside_business_type"]
+                )
                 st.session_state.vat_registered = st.checkbox(
                     "VAT Registered? (20%)", 
                     value=st.session_state.vat_registered,
                     help=TOOLTIPS["vat_registered"]
+                )
+                st.session_state.allowable_expenses = st.number_input(
+                    "Allowable company expenses (£):",
+                    min_value=0.0,
+                    value=float(st.session_state.allowable_expenses),
+                    step=500.0,
+                    help=TOOLTIPS["allowable_expenses"]
+                )
+                st.session_state.outside_salary = st.number_input(
+                    "Director salary (£):",
+                    min_value=0.0,
+                    value=float(st.session_state.outside_salary),
+                    step=500.0,
+                    help=TOOLTIPS["outside_salary"]
+                )
+                st.session_state.employer_pension_percent = st.number_input(
+                    "Employer Pension (%):",
+                    min_value=0.0,
+                    max_value=100.0,
+                    value=float(st.session_state.employer_pension_percent),
+                    step=0.5,
+                    help=TOOLTIPS["employer_pension"]
+                )
+                st.session_state.outside_student_loan = st.selectbox(
+                    "Student Loan Plan (Outside IR35):", 
+                    ["None", "Plan 1", "Plan 2", "Plan 4", "Plan 5", "Postgraduate Loan"],
+                    index=["None", "Plan 1", "Plan 2", "Plan 4", "Plan 5", "Postgraduate Loan"].index(st.session_state.outside_student_loan),
+                    help=TOOLTIPS["student_loan"]
+                )
+                st.session_state.dividend_strategy = st.selectbox(
+                    "Dividend strategy:",
+                    ["Distribute all profit after corporation tax"],
+                    index=0,
+                    help=TOOLTIPS["dividend_strategy"]
                 )
         
         submitted = st.form_submit_button("Calculate")
@@ -519,9 +774,14 @@ def main():
                         float(st.session_state.pay_rate),
                         st.session_state.working_days,
                         float(st.session_state.employee_pension) if st.session_state.status == "Inside IR35" else 0.0,
-                        st.session_state.student_loan if st.session_state.status == "Inside IR35" else "None",
+                        st.session_state.student_loan if st.session_state.status == "Inside IR35" else st.session_state.outside_student_loan,
                         st.session_state.status,
-                        st.session_state.vat_registered if st.session_state.status == "Outside IR35" else False
+                        st.session_state.vat_registered if st.session_state.status == "Outside IR35" else False,
+                        st.session_state.allowable_expenses if st.session_state.status == "Outside IR35" else 0.0,
+                        st.session_state.outside_salary if st.session_state.status == "Outside IR35" else 12570.0,
+                        st.session_state.employer_pension_percent if st.session_state.status == "Outside IR35" else 3.0,
+                        st.session_state.outside_business_type if st.session_state.status == "Outside IR35" else "Limited Company (Director/Shareholder)",
+                        st.session_state.dividend_strategy if st.session_state.status == "Outside IR35" else "Distribute all profit after corporation tax"
                     )
                     
                     st.session_state.margin = calculate_margin(
@@ -563,11 +823,25 @@ def main():
             st.write("### Project Summary")
             summary_data = [
                 ["Working Days", st.session_state.working_days],
-                ["Project Total", f"£{round(st.session_state.results.get('Project Total', 0))}"]
+                ["Project Total", f"£{round(st.session_state.results.get('Project Total', 0))}"],
+                ["Dividend Strategy", st.session_state.results.get("Dividend Strategy", "")]
             ]
             if st.session_state.vat_registered:
                 summary_data.append(["VAT Charged to Client (20%)", f"£{round(st.session_state.results.get('VAT Amount', 0))}"])
             st.dataframe(styled_dataframe(pd.DataFrame(summary_data, columns=["Metric", "Value"])), use_container_width=True)
+            company_breakdown = st.session_state.results.get("Company Breakdown", {})
+            personal_breakdown = st.session_state.results.get("Personal Breakdown", {})
+            if company_breakdown:
+                st.write("### Company Breakdown")
+                company_rows = [[key, f"£{round(value)}"] for key, value in company_breakdown.items() if key != "VAT Output"]
+                if company_breakdown.get("VAT Output", 0) > 0:
+                    company_rows.append(["VAT Output (20%)", f"£{round(company_breakdown['VAT Output'])}"])
+                st.dataframe(styled_dataframe(pd.DataFrame(company_rows, columns=["Item", "Amount"])), use_container_width=True)
+            if personal_breakdown:
+                st.write("### Personal Breakdown")
+                personal_rows = [[key, f"£{value}"] for key, value in personal_breakdown.items()]
+                st.dataframe(styled_dataframe(pd.DataFrame(personal_rows, columns=["Item", "Amount"])), use_container_width=True)
+                st.metric("Net Take-Home Pay", f"£{st.session_state.results.get('Net Take-Home Pay', 0)}")
             st.warning(st.session_state.results.get('Disclaimer', ""))
         else:
             if st.session_state.employer_deductions:
@@ -696,17 +970,22 @@ def main():
                     outside_base_rate,
                     working_days,
                     0.0,
-                    "None",
+                    st.session_state.outside_student_loan,
                     "Outside IR35",
-                    outside_vat
+                    outside_vat,
+                    st.session_state.allowable_expenses,
+                    st.session_state.outside_salary,
+                    st.session_state.employer_pension_percent,
+                    st.session_state.outside_business_type,
+                    st.session_state.dividend_strategy
                 )
                 
                 # Display comparison
                 comparison_data = [
                     ["Daily Rate", f"£{round(inside_pay_rate)}", f"£{round(outside_base_rate)}"],
                     ["Monthly Rate (20 days)", f"£{round(inside_pay_rate * 20)}", f"£{round(outside_base_rate * 20)}"],
-                    ["Project Total", f"£{round(inside_result['Net Take-Home Pay'])}", f"£{round(outside_result['Project Total'])}"],
-                    ["Effective Daily Rate (Net)", f"£{round(inside_result['Net Take-Home Pay'] / working_days)}", f"£{round(outside_result['Project Total'] / working_days)}"]
+                    ["Project Net Total", f"£{round(inside_result['Net Take-Home Pay'])}", f"£{round(outside_result['Net Take-Home Pay'])}"],
+                    ["Effective Daily Rate (Net)", f"£{round(inside_result['Net Take-Home Pay'] / working_days)}", f"£{round(outside_result['Net Take-Home Pay'] / working_days)}"]
                 ]
                 
                 if outside_vat:
